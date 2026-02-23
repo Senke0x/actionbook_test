@@ -69,11 +69,15 @@ await page.waitForFunction(() => {
 Only visible rows exist in the DOM. Scrolling renders new rows and destroys old ones.
 
 ```javascript
-// Scroll-and-collect loop for virtualized lists
+// Scroll-and-collect loop for virtualized lists (scroll container aware)
 const allItems = [];
-let previousHeight = 0;
 const maxScrolls = 50;
 let scrolls = 0;
+
+const container = await page.$('<scroll-container-selector>');
+if (!container) throw new Error('Scroll container not found');
+
+let previousTop = await container.evaluate(el => el.scrollTop);
 while (scrolls < maxScrolls) {
   const items = await page.$$eval('[data-row]', rows =>
     rows.map(r => ({ text: r.textContent.trim() }))
@@ -81,11 +85,14 @@ while (scrolls < maxScrolls) {
   for (const item of items) {
     if (!allItems.find(i => i.text === item.text)) allItems.push(item);
   }
-  await page.evaluate(() => window.scrollBy(0, 600));
+
+  await container.evaluate(el => el.scrollBy(0, 600));
   await page.waitForTimeout(300);
-  const currentHeight = await page.evaluate(() => document.documentElement.scrollTop);
-  if (currentHeight === previousHeight) break;
-  previousHeight = currentHeight;
+
+  const currentTop = await container.evaluate(el => el.scrollTop);
+  if (currentTop === previousTop) break;
+
+  previousTop = currentTop;
   scrolls += 1;
 }
 ```
@@ -97,16 +104,24 @@ while (scrolls < maxScrolls) {
 New content appends when the user scrolls near the bottom.
 
 ```javascript
-// Scroll to bottom until no new content loads
+// Scroll to bottom until no new content loads (with no-growth tolerance)
 let itemCount = 0;
+let noGrowthStreak = 0;
 const maxScrolls = 80;
 let scrolls = 0;
-while (scrolls < maxScrolls) {
+
+while (scrolls < maxScrolls && noGrowthStreak < 3) {
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1200);
+
   const newCount = await page.$$eval('.item', els => els.length);
-  if (newCount === itemCount) break; // no new items after scroll
-  itemCount = newCount;
+  if (newCount > itemCount) {
+    itemCount = newCount;
+    noGrowthStreak = 0;
+  } else {
+    noGrowthStreak += 1;
+  }
+
   scrolls += 1;
 }
 ```
