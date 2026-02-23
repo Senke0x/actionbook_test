@@ -45,7 +45,7 @@ User request
 | 2 | `actionbook browser snapshot` | Not indexed or selectors outdated |
 | 3 | DOM inspection via screenshot + snapshot | Complex SPA / dynamic content |
 
-**Non-negotiable rule:** if `search + get` already provides usable selectors for required fields, do not run `snapshot`/`screenshot` first. Start with a script draft using `get` selectors, then only branch to fallback if validation fails.
+**Non-negotiable rule:** if `search + get` already provides usable selectors for required fields, start from `get` selectors and do not jump to full fallback (`snapshot`/`screenshot`) by default. Exception: lightweight mechanism probes (for hydration/virtualization/pagination) are allowed when runtime behavior may affect script correctness. Escalate to `snapshot`/`screenshot` only when probes/sample validation indicate selector gaps or instability.
 
 ## Mechanism-Aware Script Strategy
 
@@ -202,8 +202,9 @@ actionbook get "<ID>"
 Use this routing strictly:
 
 - **Path A (default when `get` is good):** requested fields are covered by `get` selectors and quality is acceptable.
-  - Go directly to script generation + sample validation.
-  - **Do not call `snapshot` / `screenshot` / inspect tools before first script draft.**
+  - Start from `get` selectors and move to script draft quickly.
+  - You may run lightweight mechanism probes (`browser text`, quick scroll checks) before finalizing script strategy.
+  - **Do not run full fallback (`snapshot` / `screenshot`) before first draft unless probe/sample validation shows mismatch.**
   - Field mapping must default to `get` selectors and mark source as `actionbook_get`.
 
 - **Path B (partial / unstable):** `get` exists but required fields are missing, selector resolves 0 elements, or validation fails.
@@ -212,7 +213,11 @@ Use this routing strictly:
 - **Path C (no usable coverage):** search/get has no usable result.
   - Run full fallback discovery.
 
-### Step 3: Probe page mechanisms only when needed
+### Step 3: Probe page mechanisms and fallback only when needed
+
+Path A mechanism detection timing:
+- Run minimal probes either **before final script draft** or during **sample validation**.
+- If probes/sample run indicate mismatch (missing rows, unstable selectors, wrong pagination behavior), escalate to Path B targeted fallback.
 
 Fallback discovery (Path B/C):
 
