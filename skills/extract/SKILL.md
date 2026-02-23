@@ -136,30 +136,27 @@ while (pageIndex < maxPages) {
     .$eval('.result-item', el => el.textContent?.trim() || '')
     .catch(() => '');
 
-  // Register waits before clicking to avoid race conditions
-  const waitForUrlChange = page
-    .waitForURL(url => url.toString() !== previousUrl, { timeout: 5000 })
-    .then(() => true)
-    .catch(() => false);
-  const waitForListChange = page
-    .waitForFunction(
-      prev => {
-        const first = document.querySelector('.result-item');
-        return !!first && (first.textContent || '').trim() !== prev;
-      },
-      previousFirstItem,
-      { timeout: 5000 }
-    )
-    .then(() => true)
-    .catch(() => false);
-
   await nextBtn.click();
-  const [urlChanged, listChanged] = await Promise.all([
-    waitForUrlChange,
-    waitForListChange,
+
+  // Post-click detection only: advance must be caused by this click
+  const advanced = await Promise.race([
+    page
+      .waitForURL(url => url.toString() !== previousUrl, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false),
+    page
+      .waitForFunction(
+        prev => {
+          const first = document.querySelector('.result-item');
+          return !!first && (first.textContent || '').trim() !== prev;
+        },
+        previousFirstItem,
+        { timeout: 5000 }
+      )
+      .then(() => true)
+      .catch(() => false),
   ]);
 
-  const advanced = urlChanged || listChanged;
   if (!advanced) break;
 
   await page.waitForLoadState('networkidle').catch(() => {});
