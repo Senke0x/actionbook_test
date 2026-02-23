@@ -72,7 +72,9 @@ Only visible rows exist in the DOM. Scrolling renders new rows and destroys old 
 // Scroll-and-collect loop for virtualized lists
 const allItems = [];
 let previousHeight = 0;
-while (true) {
+const maxScrolls = 50;
+let scrolls = 0;
+while (scrolls < maxScrolls) {
   const items = await page.$$eval('[data-row]', rows =>
     rows.map(r => ({ text: r.textContent.trim() }))
   );
@@ -84,6 +86,7 @@ while (true) {
   const currentHeight = await page.evaluate(() => document.documentElement.scrollTop);
   if (currentHeight === previousHeight) break;
   previousHeight = currentHeight;
+  scrolls += 1;
 }
 ```
 
@@ -96,12 +99,15 @@ New content appends when the user scrolls near the bottom.
 ```javascript
 // Scroll to bottom until no new content loads
 let itemCount = 0;
-while (true) {
+const maxScrolls = 80;
+let scrolls = 0;
+while (scrolls < maxScrolls) {
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(1000);
   const newCount = await page.$$eval('.item', els => els.length);
   if (newCount === itemCount) break; // no new items after scroll
   itemCount = newCount;
+  scrolls += 1;
 }
 ```
 
@@ -114,7 +120,9 @@ Multi-page results behind "Next" buttons or numbered pages.
 ```javascript
 // Click-through pagination (navigation-aware, SPA-safe)
 const allData = [];
-while (true) {
+const maxPages = 50;
+let pageIndex = 0;
+while (pageIndex < maxPages) {
   const pageData = await page.$$eval('.result-item', items =>
     items.map(el => ({ title: el.querySelector('h3')?.textContent?.trim() }))
   );
@@ -144,6 +152,7 @@ while (true) {
   ]).catch(() => {});
 
   await page.waitForLoadState('networkidle').catch(() => {});
+  pageIndex += 1;
 }
 ```
 
@@ -204,6 +213,7 @@ Write a standalone Playwright script (`extract_<domain>_<slug>.cjs`) that:
 4. Extracts data into structured objects.
 5. Writes output to disk (`JSON.stringify` / CSV).
 6. Closes the browser.
+7. Enforces guardrails (`maxPages`, `maxScrolls`, timeout budget) to avoid infinite loops.
 
 **Script template:**
 
@@ -218,7 +228,7 @@ const { chromium } = require('playwright');
   const browser = await chromium.launch();
   const page = await browser.newPage();
 
-  await page.goto('<URL>', { waitUntil: 'networkidle' });
+  await page.goto('<URL>', { waitUntil: 'domcontentloaded' });
 
   // -- wait for readiness --
   await page.waitForSelector('<container>', { state: 'visible' });
