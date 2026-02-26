@@ -31,12 +31,12 @@ pub async fn try_http_fetch(
     max_tokens: Option<usize>,
     _session_tag: Option<&str>,
 ) -> Result<Option<HttpFetchResult>, Box<dyn std::error::Error + Send + Sync>> {
-    // Security: Parse URL and force HTTPS scheme to prevent downgrade attacks
-    let mut parsed_url = reqwest::Url::parse(url)?;
-    if parsed_url.scheme() == "http" {
-        parsed_url
-            .set_scheme("https")
-            .map_err(|_| "Failed to set HTTPS scheme")?;
+    // Security: Only accept HTTPS URLs to prevent downgrade attacks
+    // For HTTP URLs, fall back to browser-based fetching (caller's responsibility)
+    let parsed_url = reqwest::Url::parse(url)?;
+    if parsed_url.scheme() != "https" {
+        // Return None to signal caller should use browser-based fetch instead
+        return Ok(None);
     }
 
     let client = reqwest::Client::builder()
