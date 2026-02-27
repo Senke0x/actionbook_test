@@ -402,7 +402,7 @@ When Action Manual selectors don't work, follow this ordered fallback chain:
 
 ### When to Exit
 
-If actionbook search returns no results or action fails unexpectedly, you may use other available tools to continue.
+If actionbook search returns no results or action fails unexpectedly, use other available tools to continue the task.
 
 ## Examples
 
