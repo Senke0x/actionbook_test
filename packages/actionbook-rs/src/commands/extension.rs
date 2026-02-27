@@ -64,16 +64,6 @@ async fn serve(_cli: &Cli, port: u16) -> Result<()> {
     println!("  {}  Press Ctrl+C to stop", "ℹ".dimmed());
     println!();
 
-    // Write PID file so `extension stop` can find this process
-    // Mandatory: fail-fast if PID file cannot be written
-    extension_bridge::write_pid_file(port).await
-        .map_err(|e| {
-            ActionbookError::Other(format!(
-                "Failed to write PID file - check directory permissions: {}",
-                e
-            ))
-        })?;
-
     // Generate session token
     let token = extension_bridge::generate_token();
     extension_bridge::write_token_file(&token).await?;

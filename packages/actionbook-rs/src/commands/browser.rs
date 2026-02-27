@@ -10,11 +10,11 @@ use tokio::time::timeout;
 #[cfg(feature = "stealth")]
 use crate::browser::apply_stealth_to_page;
 use crate::browser::{
-    build_stealth_profile, discover_all_browsers, extension_bridge, BrowserDriver,
-    stealth_status, SessionManager, SessionStatus, StealthConfig,
+    bridge_lifecycle, build_stealth_profile, discover_all_browsers, extension_bridge,
+    BrowserDriver, stealth_status, SessionManager, SessionStatus, StealthConfig,
     ResourceBlockLevel,
 };
-use crate::cli::{BrowserCommands, Cli, CookiesCommands, FingerprintCommands, StorageCommands};
+use crate::cli::{BrowserCommands, BrowserMode, Cli, CookiesCommands, FingerprintCommands, StorageCommands};
 use crate::config::Config;
 use crate::error::{ActionbookError, Result};
 
@@ -488,6 +488,28 @@ fn has_explicit_scheme(input: &str) -> bool {
 }
 
 pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
+    let mut config = Config::load()?;
+
+    // Resolve effective extension mode: CLI flags > config.browser.mode
+    let cli = if cli.extension || cli.browser_mode == Some(BrowserMode::Extension) {
+        // Explicit CLI flag — also pick up config port if CLI port is default
+        let mut effective = cli.clone();
+        effective.extension = true;
+        if effective.extension_port == 19222 {
+            effective.extension_port = config.browser.extension.port;
+        }
+        effective
+    } else if cli.browser_mode.is_none() && matches!(config.browser.mode, BrowserMode::Extension) {
+        // No CLI override — config says extension mode
+        let mut effective = cli.clone();
+        effective.extension = true;
+        effective.extension_port = config.browser.extension.port;
+        effective
+    } else {
+        cli.clone()
+    };
+    let cli = &cli;
+
     // --profile is not supported in extension mode: extension operates on the live Chrome profile
     if cli.extension && cli.profile.is_some() {
         return Err(ActionbookError::Other(
@@ -495,8 +517,6 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
              Remove --profile to use the default profile, or remove --extension to use isolated mode.".to_string()
         ));
     }
-
-    let mut config = Config::load()?;
 
     // Apply CLI overrides (--browser-path, --headless) to the active profile
     if cli.browser_path.is_some() || cli.headless {
@@ -520,6 +540,11 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
     // which has its own CDP resolution logic.
     if !matches!(command, BrowserCommands::Connect { .. }) {
         ensure_cdp_override(cli, &config).await?;
+    }
+
+    // Auto-start extension bridge when in extension mode
+    if cli.extension {
+        bridge_lifecycle::ensure_bridge_running(cli.extension_port).await?;
     }
 
     match command {

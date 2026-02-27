@@ -340,6 +340,11 @@ pub async fn serve_with_shutdown(
         ActionbookError::Other(format!("Failed to bind to {}: {}", addr, e))
     })?;
 
+    // Write PID file after successful bind so `extension stop` can find this process
+    if let Err(e) = write_pid_file(port).await {
+        tracing::warn!("Failed to write PID file: {}. Stop command may not work.", e);
+    }
+
     let state = Arc::new(Mutex::new(BridgeState::new(token)));
 
     println!("Bridge server listening on ws://127.0.0.1:{}", port);
@@ -592,8 +597,10 @@ async fn handle_connection(stream: TcpStream, state: Arc<Mutex<BridgeState>>) {
         }
     }
 
-    // Validate token (constant-time to prevent timing side-channels)
-    {
+    // Validate token — extension clients use localhost trust model (no token required),
+    // CLI clients must provide a matching token.
+    // TODO: Harden by also validating Origin header (chrome-extension://<id>) for extension clients
+    if client_role != "extension" {
         let s = state.lock().await;
         let token_match = client_token.as_bytes().ct_eq(s.token.as_bytes());
         if token_match.unwrap_u8() != 1 {

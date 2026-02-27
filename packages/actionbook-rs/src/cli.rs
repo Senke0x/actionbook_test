@@ -28,7 +28,7 @@ pub enum BrowserMode {
 }
 
 /// Actionbook CLI - Browser automation with zero installation
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(name = "actionbook", bin_name = "actionbook")]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
@@ -129,7 +129,7 @@ pub struct Cli {
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum Commands {
     /// Browser automation commands
     Browser {
@@ -276,7 +276,7 @@ pub enum Commands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum BrowserCommands {
     /// Show browser status and detection results
     Status,
@@ -614,7 +614,7 @@ pub enum BrowserCommands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum FingerprintCommands {
     /// Generate and apply a new random fingerprint
     Rotate {
@@ -627,7 +627,7 @@ pub enum FingerprintCommands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum CookiesCommands {
     /// List all cookies
     List,
@@ -665,7 +665,7 @@ pub enum CookiesCommands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum StorageCommands {
     /// Get a value from localStorage
     Get {
@@ -707,7 +707,7 @@ pub enum StorageCommands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum ScrollDirection {
     /// Scroll down by pixels
     Down {
@@ -739,7 +739,7 @@ pub enum ScrollDirection {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum ExtensionCommands {
     #[command(hide = true)]
     /// Start the extension bridge WebSocket server
@@ -787,7 +787,7 @@ pub enum ExtensionCommands {
     Uninstall,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum SourcesCommands {
     /// List all sources
     List,
@@ -799,7 +799,7 @@ pub enum SourcesCommands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum ConfigCommands {
     /// Show current configuration
     Show,
@@ -828,7 +828,7 @@ pub enum ConfigCommands {
     Reset,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum ProfileCommands {
     /// List all profiles
     List,
