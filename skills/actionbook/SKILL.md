@@ -361,23 +361,15 @@ actionbook --wait-hint <hint> <command>          # Domain-aware wait (instant/fa
 - The user's real browser is being controlled — avoid destructive actions (clearing all cookies, closing all tabs) without confirmation
 - L3 operations (some cookie/storage modifications) may require manual approval in the extension popup
 
-### Login Page Handling (Human-in-the-loop when feasible)
-When you hit a login/auth wall (sign-in page, password prompt, MFA/OTP, CAPTCHA, account chooser), apply this policy:
+### Login Page Handling
+When you hit a login/auth wall (sign-in page, password prompt, MFA/OTP, CAPTCHA, account chooser):
 
-**Applicability gate**
-- Use manual-login flow when running **headful** and a user is available to intervene.
-- If running headless/non-interactive (or no user available), do not wait indefinitely — follow fallback/exit criteria below.
+1. **Pause automation and keep the current browser session open** (same tab/profile/cookies).
+2. **Ask the user to complete login manually** in that same browser window.
+3. After user confirms login is done, **continue in the same session**.
+4. If login lands on a different page type, rerun Phase 1 (`search` → `get`) for that new page type before further commands.
 
-**Manual-login flow (default for headful runs)**
-1. **Do not abandon Actionbook flow immediately.**
-2. **Keep the current browser session open** (same tab/profile/cookies); do not clear storage or restart unless user asks.
-3. **Ask the user to manually complete login** in that same browser session.
-4. After user confirms login is done, **continue in the same session**.
-5. If login lands on a different page type, rerun Phase 1 (`search` → `get`) for that new page type before further commands.
-
-**Fallback/exit criteria (avoid deadlock)**
-- If user is unavailable, no confirmation is received within a reasonable timeout, or login is not completable (e.g., CAPTCHA/MFA cannot be satisfied), mark the run as blocked and proceed with an alternative approach/tool as appropriate.
-- Always report the blocker reason explicitly and what was attempted.
+Do not switch tools just because a login page appears.
 
 ### Browser Lifecycle
 Always clean up when the task is complete:
@@ -411,8 +403,6 @@ When Action Manual selectors don't work, follow this ordered fallback chain:
 ### When to Exit
 
 If actionbook search returns no results or action fails unexpectedly, you may use other available tools to continue.
-
-**Exception (important):** if failure is caused by a login/auth checkpoint, do **not** switch away immediately when manual-login flow is feasible (headful + user available). Otherwise apply the login fallback/exit criteria above and continue with an alternative approach.
 
 ## Examples
 
