@@ -361,6 +361,17 @@ actionbook --wait-hint <hint> <command>          # Domain-aware wait (instant/fa
 - The user's real browser is being controlled — avoid destructive actions (clearing all cookies, closing all tabs) without confirmation
 - L3 operations (some cookie/storage modifications) may require manual approval in the extension popup
 
+### Login Page Handling (Human-in-the-loop, default behavior)
+When you hit a login/auth wall (sign-in page, password prompt, MFA/OTP, CAPTCHA, account chooser):
+
+1. **Do not abandon Actionbook flow by default.**
+2. **Keep the current browser session open** (same tab/profile/cookies); do not clear storage or restart unless user asks.
+3. **Ask the user to manually complete login** in the headful browser window.
+4. After user confirms login is done, **continue in the same session**.
+5. If login lands on a different page type, rerun Phase 1 (`search` → `get`) for that new page type before further commands.
+
+Only switch to another solution if the user explicitly asks to stop manual login handling.
+
 ### Browser Lifecycle
 Always clean up when the task is complete:
 - **CDP mode:** Run `actionbook browser close` as the final step
@@ -392,7 +403,9 @@ When Action Manual selectors don't work, follow this ordered fallback chain:
 
 ### When to Exit
 
-If actionbook search returns no results or action fails unexpectedly, use other available tools to continue the task.
+If actionbook search returns no results or action fails unexpectedly, you may use other available tools to continue.
+
+**Exception (important):** if failure is caused by a login/auth checkpoint, do **not** switch away immediately. Follow the login handling rule above (human completes login in the same headful session, then continue).
 
 ## Examples
 
