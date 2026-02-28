@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use async_trait::async_trait;
+#[cfg(any())] // gated: BrowserBackend trait not yet defined
 use base64::Engine;
 use serde_json::Value;
 
-use super::backend::{BrowserBackend, OpenResult, PageEntry};
 use super::extension_bridge;
 use crate::error::{ActionbookError, Result};
 
@@ -54,7 +53,7 @@ impl ExtensionBackend {
     /// - Silent retries for first 12 attempts (6s) to cover 2 extension polling cycles.
     ///   Extension polls via Native Messaging every 2s, so 2 cycles + handshake = 6s max wait.
     /// - After 12 failed attempts, print user-facing instructions.
-    async fn send(&self, method: &str, params: Value) -> Result<Value> {
+    pub async fn send(&self, method: &str, params: Value) -> Result<Value> {
         let result = self.send_once(method, params.clone()).await;
 
         match &result {
@@ -257,11 +256,13 @@ fn js_resolve_selector(selector: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// BrowserBackend implementation
+// BrowserBackend trait implementation — gated until the BrowserBackend trait
+// is introduced (currently only an enum in backend.rs).
 // ---------------------------------------------------------------------------
 
-#[async_trait]
-impl BrowserBackend for ExtensionBackend {
+#[cfg(any())] // gated: BrowserBackend trait not yet defined
+#[async_trait::async_trait]
+impl super::backend::BrowserBackend for ExtensionBackend {
     async fn open(&self, url: &str) -> Result<OpenResult> {
         let result = self
             .send(

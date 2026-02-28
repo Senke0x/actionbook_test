@@ -9,8 +9,9 @@ use tokio::time::timeout;
 
 #[cfg(feature = "stealth")]
 use crate::browser::apply_stealth_to_page;
+use crate::browser::extension_backend::ExtensionBackend;
 use crate::browser::{
-    bridge_lifecycle, build_stealth_profile, discover_all_browsers, extension_bridge,
+    bridge_lifecycle, build_stealth_profile, discover_all_browsers,
     BrowserDriver, stealth_status, SessionManager, SessionStatus, StealthConfig,
     ResourceBlockLevel,
 };
@@ -19,29 +20,16 @@ use crate::config::{Config, DEFAULT_EXTENSION_PORT};
 use crate::error::{ActionbookError, Result};
 
 /// Send a command (CDP or Extension.*) through the extension bridge.
-/// For CDP methods, auto-attaches the active tab if no tab is currently attached.
+/// Delegates to ExtensionBackend which provides:
+/// - Auto-attach: retries with Extension.attachActiveTab on "No tab attached"
+/// - Connection retry: waits up to 30s for the extension to connect
 async fn extension_send(
     cli: &Cli,
     method: &str,
     params: serde_json::Value,
 ) -> Result<serde_json::Value> {
-    let result = extension_bridge::send_command(cli.extension_port, method, params.clone()).await;
-
-    // Auto-attach: if a CDP method fails because no tab is attached, attach the active tab and retry
-    if let Err(ActionbookError::ExtensionError(ref msg)) = result {
-        if msg.contains("No tab attached") && !method.starts_with("Extension.") {
-            tracing::debug!("Auto-attaching active tab for {}", method);
-            extension_bridge::send_command(
-                cli.extension_port,
-                "Extension.attachActiveTab",
-                serde_json::json!({}),
-            )
-            .await?;
-            return extension_bridge::send_command(cli.extension_port, method, params).await;
-        }
-    }
-
-    result
+    let backend = ExtensionBackend::new(cli.extension_port);
+    backend.send(method, params).await
 }
 
 /// Evaluate JS via the extension bridge and return the result value
