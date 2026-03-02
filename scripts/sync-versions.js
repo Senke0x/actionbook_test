@@ -4,7 +4,7 @@
  * Post-changeset version sync script.
  *
  * Runs after `changeset version` to keep derived versions in sync:
- *   1. CLI version → 6 platform package.json version
+ *   1. CLI version → 6 platform package.json version + Cargo.toml
  *   2. Extension package.json version → manifest.json version
  *
  * Note: CLI optionalDependencies use workspace:* protocol so pnpm resolves
@@ -46,6 +46,38 @@ for (const rel of PLATFORM_PACKAGES) {
   if (prev !== cliVersion) {
     console.log(`  ${rel}: ${prev} → ${cliVersion}`);
   }
+}
+
+// Sync Cargo.toml version
+const cargoTomlPath = path.join(ROOT, "packages/actionbook-rs/Cargo.toml");
+let cargoToml = fs.readFileSync(cargoTomlPath, "utf8");
+const cargoVersionMatch = cargoToml.match(/^version\s*=\s*"(.+)"/m);
+if (!cargoVersionMatch) {
+  throw new Error("Cargo.toml: 'version' field not found");
+}
+if (cargoVersionMatch[1] !== cliVersion) {
+  const prevCargo = cargoVersionMatch[1];
+  cargoToml = cargoToml.replace(
+    /^(version\s*=\s*").+(")/m,
+    `$1${cliVersion}$2`
+  );
+  fs.writeFileSync(cargoTomlPath, cargoToml);
+  console.log(`  packages/actionbook-rs/Cargo.toml: ${prevCargo} → ${cliVersion}`);
+}
+
+// Sync Cargo.lock root package version (text replacement, no cargo needed)
+const cargoLockPath = path.join(ROOT, "packages/actionbook-rs/Cargo.lock");
+let cargoLock = fs.readFileSync(cargoLockPath, "utf8");
+const lockVersionRe = /(^\[\[package\]\]\nname = "actionbook"\nversion = ")([^"]+)(")/m;
+const lockMatch = cargoLock.match(lockVersionRe);
+if (!lockMatch) {
+  throw new Error("Cargo.lock: root actionbook package entry not found");
+}
+if (lockMatch[2] !== cliVersion) {
+  const prevLock = lockMatch[2];
+  cargoLock = cargoLock.replace(lockVersionRe, `$1${cliVersion}$3`);
+  fs.writeFileSync(cargoLockPath, cargoLock);
+  console.log(`  packages/actionbook-rs/Cargo.lock: ${prevLock} → ${cliVersion}`);
 }
 
 console.log(`CLI sync done (v${cliVersion})`);
