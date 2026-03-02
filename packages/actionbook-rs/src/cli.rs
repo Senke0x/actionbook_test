@@ -614,6 +614,39 @@ pub enum BrowserCommands {
         /// CDP endpoint (port or WebSocket URL)
         endpoint: String,
     },
+
+    /// Manage browser tabs (list, create, switch, close)
+    Tab {
+        #[command(subcommand)]
+        command: TabCommands,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum TabCommands {
+    /// List all open tabs/pages
+    List,
+
+    /// Create a new tab with optional URL
+    New {
+        /// Optional URL to open in the new tab
+        url: Option<String>,
+    },
+
+    /// Switch to a specific tab by ID
+    Switch {
+        /// Page/tab ID (get from 'tab list')
+        page_id: String,
+    },
+
+    /// Close a specific tab by ID
+    Close {
+        /// Page/tab ID to close (defaults to active tab)
+        page_id: Option<String>,
+    },
+
+    /// Show currently active tab
+    Active,
 }
 
 #[derive(Subcommand, Clone)]

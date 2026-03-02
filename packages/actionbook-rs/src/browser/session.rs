@@ -13,7 +13,7 @@ use crate::config::{Config, ProfileConfig};
 use crate::error::{ActionbookError, Result};
 
 /// Page info from CDP /json/list endpoint
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PageInfo {
     pub id: String,
@@ -31,6 +31,8 @@ struct SessionState {
     cdp_port: u16,
     pid: Option<u32>,
     cdp_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_page_id: Option<String>,
 }
 
 /// Stealth configuration for session manager
@@ -141,6 +143,7 @@ impl SessionManager {
             cdp_port,
             pid: None,
             cdp_url: cdp_url.to_string(),
+            active_page_id: None,
         };
         self.save_session_state(&state)
     }
@@ -228,6 +231,7 @@ impl SessionManager {
             cdp_port: launcher.get_cdp_port(),
             pid: None, // TODO: get actual PID
             cdp_url: cdp_url.clone(),
+            active_page_id: None,
         };
         self.save_session_state(&state)?;
 
@@ -419,11 +423,108 @@ impl SessionManager {
 
     /// Get the active page info (first page in the list)
     pub async fn get_active_page_info(&self, profile_name: Option<&str>) -> Result<PageInfo> {
-        let pages = self.get_pages(profile_name).await?;
+        let profile_name = self.resolve_profile_name(profile_name);
+        let pages = self.get_pages(Some(&profile_name)).await?;
+
+        // Try to get persisted active page
+        if let Some(state) = self.load_session_state(&profile_name) {
+            if let Some(active_id) = state.active_page_id {
+                if let Some(page) = pages.iter().find(|p| p.id == active_id) {
+                    return Ok(page.clone());
+                }
+            }
+        }
+
+        // Fallback to first page
         pages
             .into_iter()
             .next()
             .ok_or(ActionbookError::BrowserNotRunning)
+    }
+
+    /// Switch to a specific page by ID and persist the active page
+    pub async fn switch_to_page(&self, profile_name: Option<&str>, page_id: &str) -> Result<PageInfo> {
+        let profile_name = self.resolve_profile_name(profile_name);
+
+        // Validate page exists
+        let pages = self.get_pages(Some(&profile_name)).await?;
+        let target_page = pages
+            .iter()
+            .find(|p| p.id == page_id)
+            .ok_or_else(|| ActionbookError::PageNotFound(page_id.to_string()))?
+            .clone();
+
+        // Update session state with new active page ID
+        let mut state = self.load_session_state(&profile_name)
+            .ok_or(ActionbookError::BrowserNotRunning)?;
+        state.active_page_id = Some(page_id.to_string());
+        self.save_session_state(&state)?;
+
+        Ok(target_page)
+    }
+
+    /// Create a new page/tab in the browser
+    pub async fn new_page(&self, profile_name: Option<&str>, url: Option<&str>) -> Result<PageInfo> {
+        let profile_name = self.resolve_profile_name(profile_name);
+
+        // Send CDP command Target.createTarget
+        let params = serde_json::json!({
+            "url": url.unwrap_or("about:blank")
+        });
+
+        let result = self.send_cdp_command(Some(&profile_name), "Target.createTarget", params).await?;
+        let target_id = result.get("targetId")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ActionbookError::CdpError("No targetId in response".to_string()))?;
+
+        // Wait for page to appear in /json/list
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let pages = self.get_pages(Some(&profile_name)).await?;
+        let new_page = pages
+            .iter()
+            .find(|p| p.id == target_id)
+            .ok_or_else(|| ActionbookError::PageNotFound(target_id.to_string()))?
+            .clone();
+
+        // Auto-switch to newly created page
+        self.switch_to_page(Some(&profile_name), &new_page.id).await?;
+
+        Ok(new_page)
+    }
+
+    /// Close a specific page/tab
+    pub async fn close_page(&self, profile_name: Option<&str>, page_id: &str) -> Result<()> {
+        let profile_name = self.resolve_profile_name(profile_name);
+
+        // Validate page exists
+        let pages = self.get_pages(Some(&profile_name)).await?;
+        if !pages.iter().any(|p| p.id == page_id) {
+            return Err(ActionbookError::PageNotFound(page_id.to_string()));
+        }
+
+        // Cannot close last page
+        if pages.len() == 1 {
+            return Err(ActionbookError::InvalidOperation(
+                "Cannot close the last tab. Use 'browser close' to close the browser.".to_string()
+            ));
+        }
+
+        // Send CDP command Target.closeTarget
+        let params = serde_json::json!({ "targetId": page_id });
+        self.send_cdp_command(Some(&profile_name), "Target.closeTarget", params).await?;
+
+        // If we closed the active page, switch to first remaining page
+        if let Some(state) = self.load_session_state(&profile_name) {
+            if state.active_page_id.as_ref() == Some(&page_id.to_string()) {
+                let remaining_pages = self.get_pages(Some(&profile_name)).await?;
+                if let Some(first_page) = remaining_pages.first() {
+                    self.switch_to_page(Some(&profile_name), &first_page.id).await?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Execute JavaScript on the active page using direct CDP via WebSocket

@@ -15,7 +15,7 @@ use crate::browser::{
     BrowserDriver, stealth_status, SessionManager, SessionStatus, StealthConfig,
     ResourceBlockLevel,
 };
-use crate::cli::{BrowserCommands, BrowserMode, Cli, CookiesCommands, FingerprintCommands, StorageCommands};
+use crate::cli::{BrowserCommands, BrowserMode, Cli, CookiesCommands, FingerprintCommands, StorageCommands, TabCommands};
 use crate::config::{Config, DEFAULT_EXTENSION_PORT};
 use crate::error::{ActionbookError, Result};
 
@@ -637,6 +637,7 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
         BrowserCommands::Close => close(cli, &config).await,
         BrowserCommands::Restart => restart(cli, &config).await,
         BrowserCommands::Connect { endpoint } => connect(cli, &config, endpoint).await,
+        BrowserCommands::Tab { command } => tab_command(cli, &config, command).await,
     }
 }
 
@@ -4684,6 +4685,221 @@ async fn connect(cli: &Cli, config: &Config, endpoint: &str) -> Result<()> {
         println!("{} Connected to CDP at port {}", "✓".green(), cdp_port);
         println!("  WebSocket URL: {}", cdp_url);
         println!("  Profile: {}", profile_name);
+    }
+
+    Ok(())
+}
+
+async fn tab_command(cli: &Cli, config: &Config, cmd: &TabCommands) -> Result<()> {
+    match cmd {
+        TabCommands::List => tab_list(cli, config).await,
+        TabCommands::New { url } => tab_new(cli, config, url.as_deref()).await,
+        TabCommands::Switch { page_id } => tab_switch(cli, config, page_id).await,
+        TabCommands::Close { page_id } => tab_close(cli, config, page_id.as_deref()).await,
+        TabCommands::Active => tab_active(cli, config).await,
+    }
+}
+
+async fn tab_list(cli: &Cli, config: &Config) -> Result<()> {
+    if cli.extension {
+        // Extension mode
+        let result = extension_send(cli, "Extension.listTabs", serde_json::json!({})).await?;
+        let tabs = result.get("tabs").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&tabs)?);
+        } else {
+            println!("{}", "Open tabs:".bold());
+            for (i, tab) in tabs.iter().enumerate() {
+                let id = tab.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+                let title = tab.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+                let url = tab.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                let active = tab.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+
+                let prefix = if active { "→".green() } else { " ".normal() };
+                println!("{} {}. [{}] {}", prefix, i + 1, id, title.cyan());
+                println!("     {}", url.dimmed());
+            }
+        }
+    } else {
+        // CDP mode
+        let driver = create_browser_driver(cli, config).await?;
+        let pages = driver.list_pages().await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&pages)?);
+        } else {
+            let active_page = driver.get_active_page().await.ok();
+            let active_id = active_page.as_ref().map(|p| p.id.as_str());
+
+            println!("{}", "Open tabs:".bold());
+            for (i, page) in pages.iter().enumerate() {
+                let is_active = Some(page.id.as_str()) == active_id;
+                let prefix = if is_active { "→".green() } else { " ".normal() };
+
+                let id_display = if page.id.len() > 12 {
+                    &page.id[..12]
+                } else {
+                    &page.id
+                };
+
+                println!("{} {}. [{}] {}", prefix, i + 1, id_display, page.title.cyan());
+                println!("     {}", page.url.dimmed());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn tab_new(cli: &Cli, config: &Config, url: Option<&str>) -> Result<()> {
+    if cli.extension {
+        let params = if let Some(url) = url {
+            serde_json::json!({ "url": url })
+        } else {
+            serde_json::json!({})
+        };
+        let result = extension_send(cli, "Extension.createTab", params).await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            let tab_id = result.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+            println!("{} Created new tab [{}]", "✓".green(), tab_id);
+        }
+    } else {
+        let mut driver = create_browser_driver(cli, config).await?;
+        let page = driver.new_page(url).await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&page)?);
+        } else {
+            let id_display = if page.id.len() > 12 {
+                &page.id[..12]
+            } else {
+                &page.id
+            };
+            println!("{} Created new tab [{}]", "✓".green(), id_display);
+            if let Some(url) = url {
+                println!("  Navigated to: {}", url);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn tab_switch(cli: &Cli, config: &Config, page_id: &str) -> Result<()> {
+    if cli.extension {
+        let tab_id: u64 = page_id.parse()
+            .map_err(|_| ActionbookError::InvalidArgument("Invalid tab ID".to_string()))?;
+        let result = extension_send(
+            cli,
+            "Extension.activateTab",
+            serde_json::json!({ "tabId": tab_id })
+        ).await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            println!("{} Switched to tab [{}]", "✓".green(), tab_id);
+        }
+    } else {
+        let mut driver = create_browser_driver(cli, config).await?;
+        let page = driver.switch_to_page(page_id).await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&page)?);
+        } else {
+            let id_display = if page.id.len() > 12 {
+                &page.id[..12]
+            } else {
+                &page.id
+            };
+            println!("{} Switched to tab [{}]", "✓".green(), id_display);
+            println!("  {}", page.title);
+            println!("  {}", page.url.dimmed());
+        }
+    }
+
+    Ok(())
+}
+
+async fn tab_close(cli: &Cli, config: &Config, page_id: Option<&str>) -> Result<()> {
+    if cli.extension {
+        let tab_id = if let Some(id) = page_id {
+            id.parse::<u64>()
+                .map_err(|_| ActionbookError::InvalidArgument("Invalid tab ID".to_string()))?
+        } else {
+            // Get active tab ID
+            let result = extension_send(cli, "Extension.getActiveTab", serde_json::json!({})).await?;
+            result.get("id").and_then(|v| v.as_u64())
+                .ok_or_else(|| ActionbookError::InvalidOperation("No active tab".to_string()))?
+        };
+
+        extension_send(cli, "Extension.closeTab", serde_json::json!({ "tabId": tab_id })).await?;
+
+        if !cli.json {
+            println!("{} Closed tab [{}]", "✓".green(), tab_id);
+        }
+    } else {
+        let mut driver = create_browser_driver(cli, config).await?;
+
+        let target_id = if let Some(id) = page_id {
+            id.to_string()
+        } else {
+            // Get active page ID
+            driver.get_active_page().await?.id
+        };
+
+        driver.close_page(&target_id).await?;
+
+        if !cli.json {
+            let id_display = if target_id.len() > 12 {
+                &target_id[..12]
+            } else {
+                &target_id
+            };
+            println!("{} Closed tab [{}]", "✓".green(), id_display);
+        }
+    }
+
+    Ok(())
+}
+
+async fn tab_active(cli: &Cli, config: &Config) -> Result<()> {
+    if cli.extension {
+        let result = extension_send(cli, "Extension.getActiveTab", serde_json::json!({})).await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            let tab_id = result.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+            let title = result.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+            let url = result.get("url").and_then(|v| v.as_str()).unwrap_or("");
+
+            println!("{}", "Active tab:".bold());
+            println!("  ID: {}", tab_id);
+            println!("  Title: {}", title.cyan());
+            println!("  URL: {}", url.dimmed());
+        }
+    } else {
+        let driver = create_browser_driver(cli, config).await?;
+        let page = driver.get_active_page().await?;
+
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&page)?);
+        } else {
+            let id_display = if page.id.len() > 12 {
+                &page.id[..12]
+            } else {
+                &page.id
+            };
+            println!("{}", "Active tab:".bold());
+            println!("  ID: {}", id_display);
+            println!("  Title: {}", page.title.cyan());
+            println!("  URL: {}", page.url.dimmed());
+        }
     }
 
     Ok(())
