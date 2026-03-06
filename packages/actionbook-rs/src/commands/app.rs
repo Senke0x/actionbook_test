@@ -58,6 +58,12 @@ pub async fn run(cli: &Cli, command: &AppCommands) -> Result<()> {
             .await
         }
         AppCommands::Type { selector, text, wait, ref_id, human } => {
+            // Validate: text is required unless using --ref mode
+            if text.is_none() && ref_id.is_none() {
+                return Err(ActionbookError::InvalidArgument(
+                    "Text is required. Use --ref <ID> to type into a snapshot reference, or provide text directly.".to_string()
+                ));
+            }
             crate::commands::browser::type_text(
                 cli,
                 &config,
@@ -70,6 +76,12 @@ pub async fn run(cli: &Cli, command: &AppCommands) -> Result<()> {
             .await
         }
         AppCommands::Fill { selector, text, wait, ref_id } => {
+            // Validate: text is required unless using --ref mode
+            if text.is_none() && ref_id.is_none() {
+                return Err(ActionbookError::InvalidArgument(
+                    "Text is required. Use --ref <ID> to fill a snapshot reference, or provide text directly.".to_string()
+                ));
+            }
             crate::commands::browser::fill(
                 cli,
                 &config,
@@ -288,7 +300,39 @@ async fn attach(cli: &Cli, config: &Config, target: &str) -> Result<()> {
         for port in [9222, 9223, 9224, 9225] {
             if is_cdp_port_responding(port).await {
                 println!("{} Detected CDP port: {}", "✓".green(), port);
-                return crate::commands::browser::connect(cli, config, &port.to_string()).await;
+
+                // Connect and save session with app path
+                let profile_name = crate::commands::browser::effective_profile_name(cli, config);
+                let (cdp_port, cdp_url) = crate::commands::browser::resolve_cdp_endpoint(&port.to_string()).await?;
+
+                let session_manager = SessionManager::new(config.clone());
+                let app_path_str = app.path.to_str().map(|s| s.to_string());
+                session_manager.save_external_session_with_app(
+                    profile_name,
+                    cdp_port,
+                    &cdp_url,
+                    app_path_str,
+                )?;
+
+                if cli.json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "success": true,
+                            "app_name": app.name,
+                            "app_path": app.path,
+                            "profile": profile_name,
+                            "cdp_port": cdp_port,
+                            "cdp_url": cdp_url
+                        })
+                    );
+                } else {
+                    println!("{} Connected to {} at port {}", "✓".green(), app.name, cdp_port);
+                    println!("  WebSocket URL: {}", cdp_url);
+                    println!("  Profile: {}", profile_name);
+                }
+
+                return Ok(());
             }
         }
 
@@ -300,11 +344,11 @@ async fn attach(cli: &Cli, config: &Config, target: &str) -> Result<()> {
         )));
     };
 
-    // Delegate to browser connect command
+    // Delegate to browser connect command (for port/URL endpoints)
     crate::commands::browser::connect(cli, config, &endpoint).await
 }
 
-/// Check if a CDP port is responding
+/// Check if a CDP port is responding with valid CDP protocol
 async fn is_cdp_port_responding(port: u16) -> bool {
     use std::time::Duration;
 
@@ -317,11 +361,24 @@ async fn is_cdp_port_responding(port: u16) -> bool {
         Err(_) => return false,
     };
 
-    client
+    // Check /json/version endpoint for CDP protocol
+    let response = match client
         .get(format!("http://127.0.0.1:{}/json/version", port))
         .send()
         .await
-        .is_ok()
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return false,
+    };
+
+    // Verify response is valid CDP JSON with webSocketDebuggerUrl field
+    if let Ok(json) = response.json::<serde_json::Value>().await {
+        json.get("webSocketDebuggerUrl").is_some()
+            || json.get("Browser").is_some()
+            || json.get("Protocol-Version").is_some()
+    } else {
+        false
+    }
 }
 
 /// List all discoverable Electron applications
@@ -377,10 +434,12 @@ async fn restart(cli: &Cli, config: &Config) -> Result<()> {
     let profile_name = crate::commands::browser::effective_profile_name(cli, config);
 
     // Load session state to check if it's a custom app
-    let data_dir = dirs::data_dir()
+    // Use same path as SessionManager: ~/.actionbook/sessions
+    let sessions_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("actionbook");
-    let session_file = data_dir.join("sessions").join(format!("{}.json", profile_name));
+        .join(".actionbook")
+        .join("sessions");
+    let session_file = sessions_dir.join(format!("{}.json", profile_name));
 
     let session_state_content = fs::read_to_string(&session_file).map_err(|_| {
         ActionbookError::BrowserNotRunning

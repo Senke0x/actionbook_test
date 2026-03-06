@@ -141,13 +141,24 @@ impl SessionManager {
         cdp_port: u16,
         cdp_url: &str,
     ) -> Result<()> {
+        self.save_external_session_with_app(profile_name, cdp_port, cdp_url, None)
+    }
+
+    /// Save session state for an externally connected app with optional custom app path
+    pub fn save_external_session_with_app(
+        &self,
+        profile_name: &str,
+        cdp_port: u16,
+        cdp_url: &str,
+        custom_app_path: Option<String>,
+    ) -> Result<()> {
         let state = SessionState {
             profile_name: profile_name.to_string(),
             cdp_port,
             pid: None,
             cdp_url: cdp_url.to_string(),
             active_page_id: None,
-            custom_app_path: None,
+            custom_app_path,
         };
         self.save_session_state(&state)
     }

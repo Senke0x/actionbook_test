@@ -220,7 +220,7 @@ async fn resolve_snapshot_ref(driver: &mut BrowserDriver, ref_str: &str) -> Resu
 /// Resolve a CDP endpoint string (port number or ws:// URL) into a (port, ws_url) pair.
 /// When given a numeric port, queries `http://127.0.0.1:{port}/json/version` to discover
 /// the current browser WebSocket URL.
-async fn resolve_cdp_endpoint(endpoint: &str) -> Result<(u16, String)> {
+pub(crate) async fn resolve_cdp_endpoint(endpoint: &str) -> Result<(u16, String)> {
     if endpoint.starts_with("ws://") || endpoint.starts_with("wss://") {
         let port = endpoint
             .split("://")
