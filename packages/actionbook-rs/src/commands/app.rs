@@ -474,13 +474,25 @@ fn cdp_info_matches_app(cdp_info: &serde_json::Value, app_name: &str) -> bool {
         }
     }
 
-    // For Electron apps, often the browser string contains "Electron"
-    // but the actual app name might not be in CDP info
-    // So we also accept if it's Electron (less strict)
-    if let Some(browser) = cdp_info.get("Browser").and_then(|v| v.as_str()) {
-        if browser.to_lowercase().contains("electron") {
-            // Accept any Electron app if we're looking for an Electron app
+    // Check Android-App-Info field (some Electron apps expose this)
+    if let Some(android_info) = cdp_info.get("Android-App-Info").and_then(|v| v.as_str()) {
+        if android_info.to_lowercase().contains(&app_name_lower) {
             return true;
+        }
+    }
+
+    // For Electron apps, check if app name appears in any part of the version info
+    // This helps match when CDP doesn't expose the app name directly
+    // But we require at least partial name match - not just "Electron"
+    if let Some(browser) = cdp_info.get("Browser").and_then(|v| v.as_str()) {
+        let browser_lower = browser.to_lowercase();
+        // Only accept if it's Electron AND app name has some match in the CDP response
+        if browser_lower.contains("electron") {
+            // Check if any field contains the app name
+            let json_str = serde_json::to_string(cdp_info).unwrap_or_default().to_lowercase();
+            if json_str.contains(&app_name_lower) {
+                return true;
+            }
         }
     }
 

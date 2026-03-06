@@ -356,11 +356,11 @@ pub enum BrowserCommands {
 
     /// Type text into an element (appends to existing)
     Type {
+        /// Text to type (required)
+        text: String,
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to type (required)
-        text: String,
         /// Wait for element before typing (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,
@@ -374,11 +374,11 @@ pub enum BrowserCommands {
 
     /// Clear and type text into an element
     Fill {
+        /// Text to fill (required)
+        text: String,
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to fill (required)
-        text: String,
         /// Wait for element before filling (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,
@@ -713,11 +713,11 @@ pub enum AppCommands {
 
     /// Type text into an element (appends to existing)
     Type {
+        /// Text to type (required)
+        text: String,
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to type (required)
-        text: String,
         /// Wait for element before typing (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,
@@ -731,11 +731,11 @@ pub enum AppCommands {
 
     /// Clear and type text into an element
     Fill {
+        /// Text to fill (required)
+        text: String,
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to fill (required)
-        text: String,
         /// Wait for element before filling (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,

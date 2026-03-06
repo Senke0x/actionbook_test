@@ -499,6 +499,15 @@ fn resolve_browser_mode(
     }
 }
 
+/// Check if a command requires an active session (bridge/browser)
+fn requires_active_session(command: &BrowserCommands) -> bool {
+    !matches!(
+        command,
+        // Read-only commands that can work without active session
+        BrowserCommands::Status | BrowserCommands::Pages
+    )
+}
+
 pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
     let mut config = Config::load()?;
 
@@ -548,9 +557,9 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
         ensure_cdp_override(cli, &config).await?;
     }
 
-    // Auto-start extension bridge when in extension mode (skip for Close — no
-    // point starting a bridge just to immediately shut it down).
-    if cli.extension && !matches!(command, BrowserCommands::Close) {
+    // Auto-start extension bridge when in extension mode
+    // Skip for read-only commands (status, pages, etc.)
+    if cli.extension && requires_active_session(command) {
         bridge_lifecycle::ensure_bridge_running(cli.extension_port).await?;
     }
 
@@ -578,7 +587,6 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
             ref_id,
             human,
         } => {
-            let text = text.as_deref().unwrap_or("");
             type_text(cli, &config, selector.as_deref(), text, *w, ref_id.as_deref(), *human).await
         },
         BrowserCommands::Fill {
@@ -587,7 +595,6 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
             wait: w,
             ref_id,
         } => {
-            let text = text.as_deref().unwrap_or("");
             fill(cli, &config, selector.as_deref(), text, *w, ref_id.as_deref()).await
         },
         BrowserCommands::Select { selector, value } => select(cli, &config, selector, value).await,
@@ -3746,6 +3753,28 @@ pub(crate) async fn fetch(
     )
     .await;
 
+    // Clean up temporary session regardless of success/failure/timeout
+    // Must match the profile_name used in fetch_via_browser
+    let profile_name = format!("__fetch_{}__", std::process::id());
+    let session_manager = SessionManager::new(config.clone());
+    if let Err(e) = session_manager.close_session(Some(&profile_name)).await {
+        tracing::debug!("[{}] cleanup: close_session failed: {}", session_tag, e);
+    }
+
+    // Clean up session file and profile directory
+    let sessions_dir = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".actionbook")
+        .join("sessions");
+    let session_file = sessions_dir.join(format!("{}.json", profile_name));
+    let _ = std::fs::remove_file(&session_file);
+
+    let data_dir = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("actionbook");
+    let profile_dir = data_dir.join("profiles").join(&profile_name);
+    let _ = std::fs::remove_dir_all(&profile_dir);
+
     match fetch_result {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(e),
@@ -3996,20 +4025,8 @@ async fn complete_fetch(
         println!("{}", content);
     }
 
-    // Clean up: close the session
-    let session_manager = SessionManager::new(config.clone());
-    if let Err(e) = session_manager.close_session(Some(&profile_name)).await {
-        tracing::debug!("[{}] cleanup: {}", session_tag, e);
-    }
-
-    // Clean up temporary profile directory
-    let data_dir = dirs::data_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("actionbook");
-    let session_file = data_dir.join("sessions").join(format!("{}.json", profile_name));
-    let _ = std::fs::remove_file(&session_file);
-    let profile_dir = data_dir.join("profiles").join(&profile_name);
-    let _ = std::fs::remove_dir_all(&profile_dir);
+    // Note: Cleanup is handled by the caller (fetch function)
+    // to ensure it runs even on timeout
 
     Ok(())
 }
@@ -4144,18 +4161,12 @@ pub(crate) async fn upload(
 
 pub(crate) async fn close(cli: &Cli, config: &Config) -> Result<()> {
     if cli.extension {
-        // Best-effort detach: bridge may already be down, so ignore errors
-        if let Err(e) = extension_send(cli, "Extension.detachTab", serde_json::json!({})).await {
-            tracing::debug!("Best-effort tab detach failed (expected if bridge is down): {e}");
-        }
-
-        // Stop bridge process and clean up all state files (PID, port, token)
-        bridge_lifecycle::stop_bridge(cli.extension_port).await?;
+        extension_send(cli, "Extension.detachTab", serde_json::json!({})).await?;
 
         if cli.json {
             println!("{}", serde_json::json!({ "success": true }));
         } else {
-            println!("{} Browser closed (extension bridge stopped)", "✓".green());
+            println!("{} Tab detached (extension)", "✓".green());
         }
         return Ok(());
     }
