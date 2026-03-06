@@ -359,9 +359,8 @@ pub enum BrowserCommands {
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to type
-        #[arg(required_unless_present = "ref")]
-        text: Option<String>,
+        /// Text to type (required)
+        text: String,
         /// Wait for element before typing (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,
@@ -378,9 +377,8 @@ pub enum BrowserCommands {
         /// CSS selector (or use --ref for snapshot ref)
         #[arg(required_unless_present = "ref")]
         selector: Option<String>,
-        /// Text to fill
-        #[arg(required_unless_present = "ref")]
-        text: Option<String>,
+        /// Text to fill (required)
+        text: String,
         /// Wait for element before filling (ms), 0 to skip
         #[arg(long, default_value = "0")]
         wait: u64,
