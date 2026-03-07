@@ -413,6 +413,12 @@ pub enum BrowserCommands {
         key: String,
     },
 
+    /// Send keyboard hotkey (e.g., Control+A, Control+Shift+ArrowRight)
+    Hotkey {
+        /// Keys separated by '+' (e.g., "Control+A", "Control+Shift+C")
+        keys: String,
+    },
+
     /// Take a screenshot
     Screenshot {
         /// Output file path (default: screenshot.png)
@@ -505,6 +511,9 @@ pub enum BrowserCommands {
         /// Enable smooth scrolling
         #[arg(long)]
         smooth: bool,
+        /// Wait for scroll to complete (scrollend event)
+        #[arg(long)]
+        wait: bool,
     },
 
     /// Execute a batch of actions from JSON (stdin or file)
@@ -623,6 +632,12 @@ pub enum BrowserCommands {
     Tab {
         #[command(subcommand)]
         command: TabCommands,
+    },
+
+    /// Switch iframe context
+    SwitchFrame {
+        /// Target: iframe selector, "parent", or "default" for main frame
+        target: String,
     },
 }
 
@@ -770,6 +785,12 @@ pub enum AppCommands {
         key: String,
     },
 
+    /// Send keyboard hotkey (e.g., Control+A, Control+Shift+ArrowRight)
+    Hotkey {
+        /// Keys separated by '+' (e.g., "Control+A", "Control+Shift+C")
+        keys: String,
+    },
+
     /// Take a screenshot
     Screenshot {
         /// Output file path (default: screenshot.png)
@@ -862,6 +883,9 @@ pub enum AppCommands {
         /// Enable smooth scrolling
         #[arg(long)]
         smooth: bool,
+        /// Wait for scroll to complete (scrollend event)
+        #[arg(long)]
+        wait: bool,
     },
 
     /// Execute a batch of actions from JSON (stdin or file)
@@ -950,6 +974,12 @@ pub enum AppCommands {
     Tab {
         #[command(subcommand)]
         command: TabCommands,
+    },
+
+    /// Switch iframe context
+    SwitchFrame {
+        /// Target: iframe selector, "parent", or "default" for main frame
+        target: String,
     },
 }
 

@@ -36,6 +36,9 @@ struct SessionState {
     /// Path to custom application (for Electron apps launched via app launch)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     custom_app_path: Option<String>,
+    /// Current frame ID for iframe context (None = main frame)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_frame_id: Option<String>,
 }
 
 /// Stealth configuration for session manager
@@ -159,6 +162,7 @@ impl SessionManager {
             cdp_url: cdp_url.to_string(),
             active_page_id: None,
             custom_app_path,
+            current_frame_id: None,
         };
         self.save_session_state(&state)
     }
@@ -248,6 +252,7 @@ impl SessionManager {
             cdp_url: cdp_url.clone(),
             active_page_id: None,
             custom_app_path: None,
+            current_frame_id: None,
         };
         self.save_session_state(&state)?;
 
@@ -314,6 +319,7 @@ impl SessionManager {
             cdp_url: cdp_url.clone(),
             active_page_id: None,
             custom_app_path: Some(executable_path.to_string()),
+            current_frame_id: None,
         };
         self.save_session_state(&state)?;
 
@@ -775,7 +781,67 @@ impl SessionManager {
     /// Supports CSS selectors, XPath (starts with //), @eN and [ref=eN] snapshot references.
     fn find_element_js() -> &'static str {
         r#"
+        function __findInShadowDOM(selector) {
+            // Split by ::shadow-root separator
+            const parts = selector.split('::shadow-root');
+            if (parts.length < 2) {
+                return null;
+            }
+
+            // Find the host element
+            const hostSelector = parts[0].trim();
+            let currentElement;
+
+            // Handle ref-based selection for host
+            if (/^@e\d+$/.test(hostSelector) || /^\[ref=e\d+\]$/.test(hostSelector)) {
+                currentElement = __findElement(hostSelector);
+            } else {
+                currentElement = document.querySelector(hostSelector);
+            }
+
+            if (!currentElement) {
+                console.warn('Shadow DOM host element not found:', hostSelector);
+                return null;
+            }
+
+            // Access shadow root
+            const shadowRoot = currentElement.shadowRoot;
+            if (!shadowRoot) {
+                console.warn('Element has no shadow root:', hostSelector);
+                return null;
+            }
+
+            // Query inside shadow DOM
+            const innerSelector = parts[1].trim().replace(/^>\s*/, '').trim();
+            if (!innerSelector) {
+                // No inner selector, return shadow root's first child or host
+                return shadowRoot.firstElementChild || currentElement;
+            }
+
+            // Support nested shadow DOM: inner::shadow-root > button
+            if (innerSelector.includes('::shadow-root')) {
+                // Recursively handle nested shadow roots
+                // For this, we need to query in current shadow root first
+                const nestedParts = innerSelector.split('::shadow-root');
+                const nextHost = shadowRoot.querySelector(nestedParts[0].trim());
+                if (!nextHost) return null;
+
+                const nextShadowRoot = nextHost.shadowRoot;
+                if (!nextShadowRoot) return null;
+
+                const finalSelector = nestedParts.slice(1).join('::shadow-root').trim().replace(/^>\s*/, '').trim();
+                return nextShadowRoot.querySelector(finalSelector);
+            }
+
+            return shadowRoot.querySelector(innerSelector);
+        }
+
         function __findElement(selector) {
+            // Handle Shadow DOM syntax: element::shadow-root > inner-selector
+            if (selector.includes('::shadow-root')) {
+                return __findInShadowDOM(selector);
+            }
+
             // Normalize [ref=eN] format (from snapshot output) to @eN
             const refMatch = selector.match(/^\[ref=(e\d+)\]$/);
             if (refMatch) selector = '@' + refMatch[1];
@@ -1448,6 +1514,140 @@ impl SessionManager {
             }),
         )
         .await?;
+
+        Ok(())
+    }
+
+    /// Send keyboard hotkey (e.g., Ctrl+A, Ctrl+Shift+ArrowRight)
+    /// keys format: ["Control", "A"] or ["Control", "Shift", "ArrowRight"]
+    pub async fn send_hotkey(&self, profile_name: Option<&str>, keys: &[&str]) -> Result<()> {
+        if keys.is_empty() {
+            return Err(ActionbookError::Other("Empty key sequence".to_string()));
+        }
+
+        // Map modifier key names to their codes and modifiers flag
+        let get_modifier_info = |key: &str| -> Option<(&str, &str, i32, i32)> {
+            match key.to_lowercase().as_str() {
+                "control" | "ctrl" => Some(("Control", "ControlLeft", 17, 2)),
+                "shift" => Some(("Shift", "ShiftLeft", 16, 8)),
+                "alt" => Some(("Alt", "AltLeft", 18, 1)),
+                "meta" | "command" | "cmd" => Some(("Meta", "MetaLeft", 91, 4)),
+                _ => None,
+            }
+        };
+
+        let modifiers_count = keys.len() - 1;
+        let main_key = keys[keys.len() - 1];
+
+        // Calculate modifiers bitmask
+        let mut modifiers_mask = 0;
+        for key in &keys[..modifiers_count] {
+            if let Some((_, _, _, mask)) = get_modifier_info(key) {
+                modifiers_mask |= mask;
+            }
+        }
+
+        // Press all modifier keys
+        for key in &keys[..modifiers_count] {
+            if let Some((key_value, code, vk, _)) = get_modifier_info(key) {
+                self.send_cdp_command(
+                    profile_name,
+                    "Input.dispatchKeyEvent",
+                    serde_json::json!({
+                        "type": "keyDown",
+                        "key": key_value,
+                        "code": code,
+                        "windowsVirtualKeyCode": vk,
+                        "modifiers": modifiers_mask,
+                    }),
+                )
+                .await?;
+            }
+        }
+
+        // Press and release main key with modifiers
+        let (key_value, code, text, vk) = match main_key.to_lowercase().as_str() {
+            "a" => ("a", "KeyA", "a", 65),
+            "b" => ("b", "KeyB", "b", 66),
+            "c" => ("c", "KeyC", "c", 67),
+            "d" => ("d", "KeyD", "d", 68),
+            "e" => ("e", "KeyE", "e", 69),
+            "f" => ("f", "KeyF", "f", 70),
+            "g" => ("g", "KeyG", "g", 71),
+            "h" => ("h", "KeyH", "h", 72),
+            "i" => ("i", "KeyI", "i", 73),
+            "j" => ("j", "KeyJ", "j", 74),
+            "k" => ("k", "KeyK", "k", 75),
+            "l" => ("l", "KeyL", "l", 76),
+            "m" => ("m", "KeyM", "m", 77),
+            "n" => ("n", "KeyN", "n", 78),
+            "o" => ("o", "KeyO", "o", 79),
+            "p" => ("p", "KeyP", "p", 80),
+            "q" => ("q", "KeyQ", "q", 81),
+            "r" => ("r", "KeyR", "r", 82),
+            "s" => ("s", "KeyS", "s", 83),
+            "t" => ("t", "KeyT", "t", 84),
+            "u" => ("u", "KeyU", "u", 85),
+            "v" => ("v", "KeyV", "v", 86),
+            "w" => ("w", "KeyW", "w", 87),
+            "x" => ("x", "KeyX", "x", 88),
+            "y" => ("y", "KeyY", "y", 89),
+            "z" => ("z", "KeyZ", "z", 90),
+            "arrowleft" | "left" => ("ArrowLeft", "ArrowLeft", "", 37),
+            "arrowright" | "right" => ("ArrowRight", "ArrowRight", "", 39),
+            "arrowup" | "up" => ("ArrowUp", "ArrowUp", "", 38),
+            "arrowdown" | "down" => ("ArrowDown", "ArrowDown", "", 40),
+            "enter" | "return" => ("Enter", "Enter", "\r", 13),
+            "tab" => ("Tab", "Tab", "\t", 9),
+            "backspace" => ("Backspace", "Backspace", "", 8),
+            "delete" => ("Delete", "Delete", "", 46),
+            _ => (main_key, main_key, main_key, 0),
+        };
+
+        let mut key_down = serde_json::json!({
+            "type": "keyDown",
+            "key": key_value,
+            "code": code,
+            "windowsVirtualKeyCode": vk,
+            "modifiers": modifiers_mask,
+        });
+        if !text.is_empty() {
+            key_down["text"] = serde_json::json!(text);
+        }
+
+        self.send_cdp_command(profile_name, "Input.dispatchKeyEvent", key_down)
+            .await?;
+
+        self.send_cdp_command(
+            profile_name,
+            "Input.dispatchKeyEvent",
+            serde_json::json!({
+                "type": "keyUp",
+                "key": key_value,
+                "code": code,
+                "windowsVirtualKeyCode": vk,
+                "modifiers": modifiers_mask,
+            }),
+        )
+        .await?;
+
+        // Release all modifier keys in reverse order
+        for key in keys[..modifiers_count].iter().rev() {
+            if let Some((key_value, code, vk, _)) = get_modifier_info(key) {
+                self.send_cdp_command(
+                    profile_name,
+                    "Input.dispatchKeyEvent",
+                    serde_json::json!({
+                        "type": "keyUp",
+                        "key": key_value,
+                        "code": code,
+                        "windowsVirtualKeyCode": vk,
+                        "modifiers": 0,
+                    }),
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -2701,6 +2901,138 @@ impl SessionManager {
             tokio::time::sleep(std::time::Duration::from_millis(16)).await;
         }
         Ok(())
+    }
+
+    /// Switch to an iframe context
+    pub async fn switch_to_frame(
+        &self,
+        profile_name: Option<&str>,
+        selector: &str,
+    ) -> Result<String> {
+        // Find the iframe element
+        let selector_json = serde_json::to_string(selector)?;
+        let js = [
+            "(function() {",
+            Self::find_element_js(),
+            &format!("const el = __findElement({selector_json});"),
+            "if (!el) return null;",
+            "if (el.tagName.toLowerCase() !== 'iframe') return { error: 'Not an iframe' };",
+            "return { success: true };",
+            "})()",
+        ]
+        .join("\n");
+
+        let result = self.eval_on_page(profile_name, &js).await?;
+
+        if result.is_null() {
+            return Err(ActionbookError::ElementNotFound(selector.to_string()));
+        }
+
+        if let Some(error) = result.get("error").and_then(|e| e.as_str()) {
+            return Err(ActionbookError::Other(format!(
+                "Element is not an iframe: {}",
+                error
+            )));
+        }
+
+        // Get the iframe's frame ID via DOM.describeNode
+        let selector_json = serde_json::to_string(selector)?;
+        let find_js = [
+            "(function() {",
+            Self::find_element_js(),
+            &format!("const el = __findElement({selector_json});"),
+            "if (!el) return null;",
+            "return el;",
+            "})()",
+        ]
+        .join("\n");
+
+        let eval_result = self
+            .send_cdp_command(
+                profile_name,
+                "Runtime.evaluate",
+                serde_json::json!({
+                    "expression": find_js,
+                    "returnByValue": false,
+                }),
+            )
+            .await?;
+
+        let object_id = eval_result
+            .get("result")
+            .and_then(|r| r.get("objectId"))
+            .and_then(|o| o.as_str())
+            .ok_or_else(|| ActionbookError::Other("Failed to get element objectId".to_string()))?;
+
+        let describe_result = self
+            .send_cdp_command(
+                profile_name,
+                "DOM.describeNode",
+                serde_json::json!({
+                    "objectId": object_id
+                }),
+            )
+            .await?;
+
+        let frame_id = describe_result
+            .get("node")
+            .and_then(|n| n.get("frameId"))
+            .and_then(|f| f.as_str())
+            .ok_or_else(|| ActionbookError::Other("Element has no frameId (not an iframe)".to_string()))?;
+
+        // Store the frame ID in session state
+        let profile = self.resolve_profile_name(profile_name);
+        let session_file = self.sessions_dir.join(format!("{}.json", profile));
+
+        if session_file.exists() {
+            let content = fs::read_to_string(&session_file)?;
+            let mut state: serde_json::Value = serde_json::from_str(&content)?;
+            state["current_frame_id"] = serde_json::json!(frame_id);
+            fs::write(&session_file, serde_json::to_string_pretty(&state)?)?;
+        }
+
+        Ok(frame_id.to_string())
+    }
+
+    /// Switch to parent frame
+    pub async fn switch_to_parent_frame(&self, profile_name: Option<&str>) -> Result<()> {
+        // For now, just switch to main frame (null)
+        // TODO: Implement proper parent frame tracking
+        self.switch_to_default_frame(profile_name).await
+    }
+
+    /// Switch to main (default) frame
+    pub async fn switch_to_default_frame(&self, profile_name: Option<&str>) -> Result<()> {
+        let profile = self.resolve_profile_name(profile_name);
+        let session_file = self.sessions_dir.join(format!("{}.json", profile));
+
+        if session_file.exists() {
+            let content = fs::read_to_string(&session_file)?;
+            let mut state: serde_json::Value = serde_json::from_str(&content)?;
+            state["current_frame_id"] = serde_json::Value::Null;
+            fs::write(&session_file, serde_json::to_string_pretty(&state)?)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get current frame ID (None = main frame)
+    pub fn get_current_frame_id(&self, profile_name: Option<&str>) -> Option<String> {
+        let profile = self.resolve_profile_name(profile_name);
+        let session_file = self.sessions_dir.join(format!("{}.json", profile));
+
+        if session_file.exists() {
+            if let Ok(content) = fs::read_to_string(&session_file) {
+                if let Ok(state) = serde_json::from_str::<serde_json::Value>(&content) {
+                    return state
+                        .get("current_frame_id")
+                        .and_then(|f| f.as_str())
+                        .map(|s| s.to_string());
+                }
+            }
+        }
+
+        None
     }
 }
 

@@ -92,6 +92,9 @@ pub async fn run(cli: &Cli, command: &AppCommands) -> Result<()> {
         AppCommands::Press { key } => {
             crate::commands::browser::press(cli, &config, key).await
         }
+        AppCommands::Hotkey { keys } => {
+            crate::commands::browser::hotkey(cli, &config, keys).await
+        }
         AppCommands::Screenshot { path, full_page } => {
             crate::commands::browser::screenshot(cli, &config, path, *full_page).await
         }
@@ -140,8 +143,8 @@ pub async fn run(cli: &Cli, command: &AppCommands) -> Result<()> {
         AppCommands::Cookies { command } => {
             crate::commands::browser::cookies(cli, &config, command).await
         }
-        AppCommands::Scroll { direction, smooth } => {
-            crate::commands::browser::scroll(cli, &config, direction, *smooth).await
+        AppCommands::Scroll { direction, smooth, wait } => {
+            crate::commands::browser::scroll(cli, &config, direction, *smooth, *wait).await
         }
         AppCommands::Batch { file, delay } => {
             crate::commands::batch::run(cli, &config, file.as_deref(), *delay).await
@@ -172,6 +175,9 @@ pub async fn run(cli: &Cli, command: &AppCommands) -> Result<()> {
         }
         AppCommands::Tab { command } => {
             crate::commands::browser::tab_command(cli, &config, command).await
+        }
+        AppCommands::SwitchFrame { target } => {
+            crate::commands::browser::switch_frame(cli, &config, target).await
         }
     }
 }

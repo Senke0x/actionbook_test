@@ -601,6 +601,7 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
         BrowserCommands::Hover { selector } => hover(cli, &config, selector).await,
         BrowserCommands::Focus { selector } => focus(cli, &config, selector).await,
         BrowserCommands::Press { key } => press(cli, &config, key).await,
+        BrowserCommands::Hotkey { keys } => hotkey(cli, &config, keys).await,
         BrowserCommands::Screenshot { path, full_page } => {
             screenshot(cli, &config, path, *full_page).await
         }
@@ -616,8 +617,8 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
         }
         BrowserCommands::Viewport => viewport(cli, &config).await,
         BrowserCommands::Cookies { command } => cookies(cli, &config, command).await,
-        BrowserCommands::Scroll { direction, smooth } => {
-            scroll(cli, &config, direction, *smooth).await
+        BrowserCommands::Scroll { direction, smooth, wait } => {
+            scroll(cli, &config, direction, *smooth, *wait).await
         }
         BrowserCommands::Batch { file, delay } => {
             crate::commands::batch::run(cli, &config, file.as_deref(), *delay).await
@@ -645,6 +646,7 @@ pub async fn run(cli: &Cli, command: &BrowserCommands) -> Result<()> {
         BrowserCommands::Restart => restart(cli, &config).await,
         BrowserCommands::Connect { endpoint } => connect(cli, &config, endpoint).await,
         BrowserCommands::Tab { command } => tab_command(cli, &config, command).await,
+        BrowserCommands::SwitchFrame { target } => switch_frame(cli, &config, target).await,
     }
 }
 
@@ -2037,6 +2039,41 @@ pub(crate) async fn press(cli: &Cli, config: &Config, key: &str) -> Result<()> {
         );
     } else {
         println!("{} Pressed: {}", "✓".green(), key);
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn hotkey(cli: &Cli, config: &Config, keys: &str) -> Result<()> {
+    // Parse keys string (e.g., "Control+A" or "Control+Shift+C")
+    let key_parts: Vec<&str> = keys.split('+').map(|s| s.trim()).collect();
+
+    if key_parts.is_empty() {
+        return Err(ActionbookError::Other("Empty key sequence".to_string()));
+    }
+
+    // Extension mode not supported for hotkeys (requires complex modifier state)
+    if cli.extension {
+        return Err(ActionbookError::Other(
+            "Hotkey not supported in extension mode, use CDP mode".to_string()
+        ));
+    }
+
+    let session_manager = create_session_manager(cli, config);
+    session_manager
+        .send_hotkey(effective_profile_arg(cli, config), &key_parts)
+        .await?;
+
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "success": true,
+                "keys": keys
+            })
+        );
+    } else {
+        println!("{} Hotkey pressed: {}", "✓".green(), keys);
     }
 
     Ok(())
@@ -3545,12 +3582,13 @@ pub(crate) async fn scroll(
     config: &Config,
     direction: &crate::cli::ScrollDirection,
     smooth: bool,
+    wait: bool,
 ) -> Result<()> {
     use crate::cli::ScrollDirection;
 
     let behavior = if smooth { "smooth" } else { "instant" };
 
-    let js = match direction {
+    let js_core = match direction {
         ScrollDirection::Down { pixels } => {
             if *pixels == 0 {
                 format!(
@@ -3616,14 +3654,63 @@ pub(crate) async fn scroll(
         }
     };
 
+    // Wrap in Promise if waiting for scrollend
+    let js = if wait && !cli.extension {
+        format!(
+            r#"(async () => {{
+                return new Promise((resolve) => {{
+                    {};
+
+                    // Set timeout fallback (3 seconds)
+                    const timeout = setTimeout(() => {{
+                        window.removeEventListener('scrollend', handleScrollEnd);
+                        resolve({{ success: true, timedOut: true }});
+                    }}, 3000);
+
+                    function handleScrollEnd() {{
+                        clearTimeout(timeout);
+                        resolve({{ success: true, timedOut: false }});
+                    }}
+
+                    window.addEventListener('scrollend', handleScrollEnd, {{ once: true }});
+                }});
+            }})()"#,
+            js_core
+        )
+    } else {
+        js_core
+    };
+
     // Execute scroll command
     if cli.extension {
         extension_eval(cli, &js).await?;
     } else {
         let session_manager = create_session_manager(cli, config);
-        session_manager
-            .eval_on_page(effective_profile_arg(cli, config), &js)
-            .await?;
+        if wait {
+            // Use Runtime.evaluate with awaitPromise
+            let result = session_manager
+                .send_cdp_command(
+                    effective_profile_arg(cli, config),
+                    "Runtime.evaluate",
+                    serde_json::json!({
+                        "expression": js,
+                        "awaitPromise": true,
+                        "returnByValue": true,
+                    })
+                )
+                .await?;
+
+            // Check if timed out
+            if let Some(result_value) = result.get("result").and_then(|r| r.get("value")) {
+                if result_value.get("timedOut").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    eprintln!("Warning: Scroll wait timed out after 3 seconds");
+                }
+            }
+        } else {
+            session_manager
+                .eval_on_page(effective_profile_arg(cli, config), &js)
+                .await?;
+        }
     }
 
     // Print success message
@@ -4966,6 +5053,75 @@ pub(crate) async fn tab_active(cli: &Cli, config: &Config) -> Result<()> {
             println!("  ID: {}", id_display);
             println!("  Title: {}", page.title.cyan());
             println!("  URL: {}", page.url.dimmed());
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn switch_frame(cli: &Cli, config: &Config, target: &str) -> Result<()> {
+    if cli.extension {
+        return Err(ActionbookError::Other(
+            "Frame switching not supported in extension mode".to_string()
+        ));
+    }
+
+    let session_manager = create_session_manager(cli, config);
+
+    match target.to_lowercase().as_str() {
+        "default" | "main" => {
+            session_manager
+                .switch_to_default_frame(effective_profile_arg(cli, config))
+                .await?;
+
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "success": true,
+                        "frame": "default"
+                    })
+                );
+            } else {
+                println!("{} Switched to main frame", "✓".green());
+            }
+        }
+        "parent" => {
+            session_manager
+                .switch_to_parent_frame(effective_profile_arg(cli, config))
+                .await?;
+
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "success": true,
+                        "frame": "parent"
+                    })
+                );
+            } else {
+                println!("{} Switched to parent frame", "✓".green());
+            }
+        }
+        _ => {
+            // Treat as iframe selector
+            let frame_id = session_manager
+                .switch_to_frame(effective_profile_arg(cli, config), target)
+                .await?;
+
+            if cli.json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "success": true,
+                        "frame": frame_id,
+                        "selector": target
+                    })
+                );
+            } else {
+                println!("{} Switched to iframe: {}", "✓".green(), target);
+                println!("  Frame ID: {}", frame_id);
+            }
         }
     }
 
