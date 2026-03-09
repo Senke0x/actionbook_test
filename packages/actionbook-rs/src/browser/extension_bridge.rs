@@ -684,10 +684,12 @@ async fn handle_connection(stream: TcpStream, state: Arc<Mutex<BridgeState>>) {
 
         if has_active {
             drop(s);
+            // Send "replaced" instead of "hello_error" so the extension's existing
+            // replaced-handler stops all reconnection (wasReplaced=true, stopBridgePolling).
+            // A hello_error would trigger startBridgePolling and cause endless retry churn.
             let err_msg = serde_json::json!({
-                "type": "hello_error",
-                "error": "already_connected",
-                "message": "Another extension instance is already connected to the bridge. Only one extension can connect at a time.",
+                "type": "replaced",
+                "message": "Another extension instance is already connected to the bridge.",
             });
             let _ = write
                 .send(Message::Text(err_msg.to_string().into()))
