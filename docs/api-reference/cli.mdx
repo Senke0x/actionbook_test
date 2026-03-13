@@ -149,17 +149,17 @@ actionbook app launch Slack
 
 #### `actionbook app attach`
 
-Attach to a running Electron app on a specific CDP port.
+Attach to a running Electron app by name, port, or WebSocket URL.
 
 **Usage:**
 
 ```bash
-actionbook app attach [port]
+actionbook app attach <target>
 ```
 
 **Arguments:**
 
-- `port`: The Chrome DevTools Protocol port (default: 9222).
+- `target` (required): Application name, bundle ID, CDP port, or WebSocket URL.
 
 **Example:**
 

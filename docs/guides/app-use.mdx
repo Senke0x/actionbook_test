@@ -384,15 +384,17 @@ C:\Users\<username>\AppData\Local\Discord\app-*\Discord.exe
 ```bash
 actionbook app list
 # Check if app is in the list
-# If not, use manual path:
-actionbook app launch "/custom/path/to/app"
+# If not listed, start the app manually with CDP enabled,
+# then attach by port:
+/path/to/app --remote-debugging-port=9222
+actionbook app attach 9222
 ```
 
 ### Port Already in Use
 
 ```bash
-# Try a different port
-actionbook app launch "VS Code" --port 9223
+# Use a different CDP port via the global --cdp flag
+actionbook app launch "VS Code" --cdp 9223
 ```
 
 ### CDP Not Available
