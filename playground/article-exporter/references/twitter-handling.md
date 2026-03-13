@@ -13,9 +13,9 @@ Twitter/X long posts have **SEVERE formatting issues** with `fetch` command:
 
 ## Root Cause
 
-`actionbook browser fetch --format markdown` uses generic text extraction:
-- ✅ Works: Medium, Dev.to, OpenAI blog (native Markdown)
-- ❌ Breaks: Twitter/X (custom UI, no semantic HTML)
+`actionbook browser fetch` uses readability text extraction:
+- Works well: Medium, Dev.to, OpenAI blog (clean article structure)
+- Breaks: Twitter/X (custom UI, no semantic HTML)
 
 ## Solution: AI Reformatting (Mandatory)
 
@@ -24,8 +24,8 @@ Twitter/X long posts have **SEVERE formatting issues** with `fetch` command:
 ### Step 1: Fetch Raw Content
 
 ```bash
-actionbook browser fetch "$URL" --format markdown --wait-hint heavy 2>/dev/null | \
-  sed '/^[[:space:]]*$/d;/^\x1b\[/d;/^INFO/d' > /tmp/article_raw.md
+actionbook browser fetch "$URL" --wait-hint heavy 2>/dev/null | \
+  sed '/^[[:space:]]*$/d;/^\x1b\[/d;/^INFO/d' > /tmp/article_raw.txt
 ```
 
 ### Step 2: AI Reformatting (CRITICAL)

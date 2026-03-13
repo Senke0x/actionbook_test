@@ -2,23 +2,20 @@
 # === Both Claude Code and Codex read these ===
 name: article-exporter
 description: >
-  Export web articles and social posts to Obsidian Markdown
-  with optional AI translation and image downloads. Use when
-  the user wants to save, archive, or convert online content
-  into clean Markdown. Examples: "export this article",
-  "save this Medium post", "archive this blog post",
-  "convert this thread to markdown".
+  Export web articles and social posts to clean Obsidian
+  Markdown with image downloads and optional AI translation.
+  Use when the user wants to save, archive, or convert an
+  online article, blog post, or social thread into a local
+  Markdown knowledge base.
 
 # === Claude Code specific (Codex ignores, no side effects) ===
 when_to_use: >
   Use when the user wants to save an online article, blog post,
-  Medium post, Dev.to post, Substack post, OpenAI blog post,
-  or X/Twitter thread into Obsidian or a Markdown knowledge base.
+  or social thread into Obsidian or a Markdown knowledge base.
   Also use when the user asks to archive, translate, or convert
   web content into clean Markdown with images downloaded locally.
-  Examples: "export this article to Obsidian", "save this Medium
-  post", "archive this blog post", "convert this thread to
-  markdown", "translate and export this article".
+  Supported sources include Medium, Dev.to, Substack, OpenAI blog,
+  X/Twitter, and general web pages.
 allowed-tools:
   - Read
   - Write
@@ -51,7 +48,7 @@ These rules were extracted from real export failures. Each one prevents a specif
 | Task | Command | Success Criteria |
 |------|---------|------------------|
 | Check deps | `actionbook --version` | Shows version >= 0.9.1 |
-| Fetch article | `actionbook browser fetch <url> --format markdown --wait-hint heavy` | Returns Markdown content |
+| Fetch article | `actionbook browser fetch <url> --wait-hint heavy` | Returns readability text (AI converts to Markdown) |
 | Translate | AI session directly | README_CN.md created |
 | Open in Obsidian | `obsidian-cli open "path/index.md"` | File opens in Obsidian |
 
@@ -75,14 +72,18 @@ These rules were extracted from real export failures. Each one prevents a specif
 **Execution:** Direct (Bash)
 
 ```bash
-# Fetch article as Markdown (with log cleaning)
-actionbook browser fetch "$URL" --format markdown --wait-hint heavy 2>/dev/null | \
-  sed '/^[[:space:]]*$/d;/^\x1b\[/d;/^INFO/d' > /tmp/article.md
+# Fetch article as readability text (with log cleaning)
+actionbook browser fetch "$URL" --wait-hint heavy 2>/dev/null | \
+  sed '/^[[:space:]]*$/d;/^\x1b\[/d;/^INFO/d' > /tmp/article_raw.txt
 ```
 
 **Success criteria:**
-- `/tmp/article.md` exists and size > 0 bytes
-- First line starts with `#` (H1 heading exists)
+- `/tmp/article_raw.txt` exists and size > 0 bytes
+- Content contains the article's main text
+
+The fetch command returns readability-extracted plain text (not Markdown).
+AI reformatting is always needed to produce proper Markdown with headings,
+lists, code blocks, and image references.
 
 **Rules:**
 - Use `--wait-hint heavy` for Twitter, Medium, dynamic content

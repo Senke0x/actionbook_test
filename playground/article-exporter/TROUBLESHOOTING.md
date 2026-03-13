@@ -15,7 +15,7 @@ graph TD
     C --> C1[npm install -g @actionbookdev/cli]
     C1 --> D
 
-    D -->|Timeout| E[Add --wait-idle or increase timeout]
+    D -->|Timeout| E[Add --wait-hint heavy or increase timeout]
     D -->|OK| F{Check Images}
 
     E --> E1[Retry with longer wait time]
@@ -102,7 +102,7 @@ source ~/.bashrc  # or source ~/.zshrc
 **Solution C**: Use npx (no installation required)
 ```bash
 # Use npx to run without global install
-npx @actionbookdev/cli browser fetch <url> --format markdown
+npx @actionbookdev/cli browser fetch <url> --wait-hint heavy
 ```
 
 ---
@@ -245,7 +245,7 @@ ls -lh ~/Work/Write/Articles/<title>/README.md
 
 **Symptoms**:
 ```bash
-$ actionbook browser fetch <url> --format markdown --wait-idle
+$ actionbook browser fetch <url> --wait-hint heavy
 [Hangs for >30 seconds]
 ^C  # User cancels
 ```
@@ -258,10 +258,10 @@ $ actionbook browser fetch <url> --format markdown --wait-idle
 
 **Solutions**:
 
-**Solution A**: Already using --wait-idle (good!)
+**Solution A**: Use timeout flag
 ```bash
-# This is the correct approach
-actionbook browser fetch <url> --format markdown --wait-idle
+# Set explicit timeout (in seconds)
+actionbook browser fetch <url> --wait-hint heavy --timeout 15
 ```
 
 **Solution B**: Check if page requires login
@@ -272,10 +272,10 @@ open <url>  # macOS
 xdg-open <url>  # Linux
 ```
 
-**Solution C**: Try without --wait-idle (faster but may miss content)
+**Solution C**: Try lighter wait hint (faster but may miss content)
 ```bash
 # For simple static pages
-actionbook browser fetch <url> --format markdown
+actionbook browser fetch <url> --wait-hint light
 ```
 
 **Solution D**: Use different network
@@ -459,7 +459,7 @@ Add verbose flags to actionbook commands:
 
 ```bash
 # For actionbook (check CLI documentation for verbose flags)
-actionbook browser fetch "$URL" --format markdown --wait-idle --verbose
+actionbook browser fetch "$URL" --wait-hint heavy --wait-hint heavy --verbose
 ```
 
 ### Check Logs
@@ -527,7 +527,7 @@ npm --version
 actionbook --version
 
 # Error output
-actionbook browser fetch <url> --format markdown 2>&1 | tee error.log
+actionbook browser fetch <url> --wait-hint heavy 2>&1 | tee error.log
 
 # Disk space
 df -h

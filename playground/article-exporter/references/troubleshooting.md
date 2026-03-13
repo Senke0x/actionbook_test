@@ -106,7 +106,7 @@ curl -L -s "${url}?format=jpg&name=orig" -o "image.jpg"
 **Solution:**
 ```bash
 # Use wait-hint heavy, increase timeout
-actionbook browser fetch "$URL" --format markdown --wait-hint heavy
+actionbook browser fetch "$URL" --wait-hint heavy
 ```
 
 ---
