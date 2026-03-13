@@ -223,7 +223,7 @@ User: Please translate the file at ~/Work/Write/Articles/<title>/README.md
 ```
 User:
 1. Read the file: ~/Work/Write/Articles/<title>/README.md
-2. Translate it to Chinese (中文)
+2. Translate it to Chinese
 3. Save translation to: ~/Work/Write/Articles/<title>/README_CN.md
 ```
 

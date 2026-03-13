@@ -7,7 +7,7 @@ description: >
   the user wants to save, archive, or convert online content
   into clean Markdown. Examples: "export this article",
   "save this Medium post", "archive this blog post",
-  "导出这篇文章到 Obsidian", "把这个网页转成 markdown".
+  "convert this thread to markdown".
 
 # === Claude Code specific (Codex ignores, no side effects) ===
 when_to_use: >
@@ -18,8 +18,7 @@ when_to_use: >
   web content into clean Markdown with images downloaded locally.
   Examples: "export this article to Obsidian", "save this Medium
   post", "archive this blog post", "convert this thread to
-  markdown", "导出这篇文章", "保存这篇文章到 Obsidian",
-  "把这个网页转成 markdown", "翻译并导出这篇文章".
+  markdown", "translate and export this article".
 allowed-tools:
   - Read
   - Write
