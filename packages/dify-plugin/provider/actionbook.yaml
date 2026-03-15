@@ -4,7 +4,7 @@ identity:
   label:
     en_US: Actionbook
   description:
-    en_US: "Verified selectors and cloud browser automation for AI agents."
+    en_US: "Action manuals, verified selectors, and cloud browser automation for AI agents."
   icon: icon.svg
   tags:
     - utilities

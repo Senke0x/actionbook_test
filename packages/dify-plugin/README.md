@@ -61,19 +61,16 @@ How this maps to the actual tool behavior:
 
 ## Example Use Cases
 
-- Log into websites and submit forms inside a Dify workflow
 - Search or filter content on dynamic web apps
 - Combine Actionbook search/get tools with browser automation for agentic task execution
 - Recover from selector drift by taking a fresh `snapshot` and continuing the workflow
 
 ## Open Source & Community
 
-- **GitHub**: [github.com/actionbook/actionbook](https://github.com/actionbook/actionbook?utm_source=dify)
-- **Docs**: [actionbook.dev/docs](https://actionbook.dev/docs?utm_source=dify)
-- **Discord**: [Join Discord](https://actionbook.dev/discord?utm_source=dify)
-- **X / Twitter**: [@ActionbookHQ](https://x.com/ActionbookHQ)
-- **Website**: [actionbook.dev](https://actionbook.dev/?utm_source=dify)
+Actionbook is open source and improving fast. Start here to support the project, join the community, and shape what gets indexed next.
 
-## Request Coverage
-
-Suggest websites you want Actionbook to index at [actionbook.dev/request-website](https://actionbook.dev/request-website?utm_source=dify).
+- **GitHub**: Star the project or contribute to Actionbook. [github.com/actionbook/actionbook](https://github.com/actionbook/actionbook?utm_source=dify)
+- **Discord**: Join us to discuss questions, workflows, and ideas. [Join Discord](https://actionbook.dev/discord?utm_source=dify)
+- **Request a Website**: Tell us which websites you want Actionbook to index. [actionbook.dev/request-website](https://actionbook.dev/request-website?utm_source=dify)
+- **X / Twitter**: Follow us for the latest updates and launches. [@ActionbookHQ](https://x.com/ActionbookHQ)
+- **Website**: Get the latest overview. [actionbook.dev](https://actionbook.dev/?utm_source=dify)
