@@ -136,6 +136,13 @@ fn js_resolve_selector(selector: &str) -> String {
     )
 }
 
+/// Check whether a session JSON file exists for the given profile name.
+fn has_session_file(profile_name: &str) -> bool {
+    dirs::home_dir()
+        .map(|h| h.join(".actionbook").join("sessions").join(format!("{}.json", profile_name)))
+        .is_some_and(|p| p.exists())
+}
+
 /// Create a SessionManager with appropriate stealth configuration from CLI flags
 fn create_session_manager(cli: &Cli, config: &Config) -> SessionManager {
     let mut sm = if cli.stealth {
@@ -167,10 +174,22 @@ pub async fn create_browser_driver_public(cli: &Cli, config: &Config) -> Result<
 async fn create_browser_driver(cli: &Cli, config: &Config) -> Result<BrowserDriver> {
     // Determine profile
     let profile_name = effective_profile_arg(cli, config).unwrap_or(&config.browser.default_profile);
-    let profile = config
-        .profiles
-        .get(profile_name)
-        .ok_or_else(|| ActionbookError::Other(format!("Profile not found: {}", profile_name)))?;
+    let default_profile;
+    let profile = match config.profiles.get(profile_name) {
+        Some(p) => p,
+        None if cli.cdp.is_some() || has_session_file(profile_name) => {
+            // Ad-hoc profile created via --cdp flag, or a session file exists
+            // from a previous --cdp invocation. Use sensible defaults.
+            default_profile = crate::config::ProfileConfig::default();
+            &default_profile
+        }
+        None => {
+            return Err(ActionbookError::Other(format!(
+                "Profile not found: {}",
+                profile_name
+            )));
+        }
+    };
 
     BrowserDriver::from_config(config, profile, cli).await
 }
@@ -5633,4 +5652,43 @@ mod tests {
 
     // Tests for the new CDP Accessibility Tree snapshot formatting are in
     // browser/snapshot.rs (format_compact, format_text, parse_ax_tree, diff_snapshots)
+
+    #[test]
+    fn has_session_file_returns_false_for_nonexistent_profile() {
+        // A random profile name should not have a session file
+        assert!(!super::has_session_file("nonexistent-random-profile-xyz-12345"));
+    }
+
+    #[tokio::test]
+    async fn create_browser_driver_succeeds_with_cdp_flag_and_unknown_profile() {
+        let mut cli = test_cli(Some("adhoc-test-profile"), BrowserCommands::Status);
+        cli.cdp = Some("9999".to_string());
+        cli.browser_mode = Some(BrowserMode::Isolated);
+        let config = Config::default();
+
+        // Should not error with "Profile not found" because --cdp is set
+        let result = super::create_browser_driver(&cli, &config).await;
+        assert!(result.is_ok(), "create_browser_driver should succeed with --cdp and unknown profile");
+    }
+
+    #[tokio::test]
+    async fn create_browser_driver_fails_without_cdp_and_unknown_profile() {
+        let mut cli = test_cli(Some("definitely-nonexistent-profile"), BrowserCommands::Status);
+        cli.browser_mode = Some(BrowserMode::Isolated);
+        let config = Config::default();
+
+        // Should error with "Profile not found" because no --cdp and no session file
+        let result = super::create_browser_driver(&cli, &config).await;
+        match result {
+            Err(e) => {
+                let err_msg = e.to_string();
+                assert!(
+                    err_msg.contains("Profile not found"),
+                    "Expected 'Profile not found', got: {}",
+                    err_msg
+                );
+            }
+            Ok(_) => panic!("Expected error for unknown profile without --cdp"),
+        }
+    }
 }

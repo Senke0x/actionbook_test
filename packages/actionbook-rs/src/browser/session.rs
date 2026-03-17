@@ -109,6 +109,10 @@ pub struct SessionManager {
     /// When true, CDP commands are routed through the per-profile daemon
     /// (persistent WS connection). Set by `--daemon` CLI flag.
     daemon_enabled: bool,
+    /// CLI-selected profile override. When set, `resolve_profile_name(None)`
+    /// returns this instead of the config default. This ensures that router
+    /// methods (which pass `None`) use the profile the user actually requested.
+    active_profile: Option<String>,
 }
 
 impl SessionManager {
@@ -123,6 +127,7 @@ impl SessionManager {
             sessions_dir: Self::default_sessions_dir(),
             stealth_config: Some(stealth_config),
             daemon_enabled: false,
+            active_profile: None,
         }
     }
 
@@ -136,7 +141,15 @@ impl SessionManager {
             sessions_dir,
             stealth_config: None,
             daemon_enabled: false,
+            active_profile: None,
         }
+    }
+
+    /// Set the active profile for this session manager.
+    /// When set, all CDP commands route through this profile's session
+    /// instead of the config default.
+    pub fn set_active_profile(&mut self, profile: &str) {
+        self.active_profile = Some(profile.to_string());
     }
 
     /// Enable daemon routing for CDP commands.
@@ -163,7 +176,10 @@ impl SessionManager {
     fn resolve_profile_name(&self, profile_name: Option<&str>) -> String {
         match profile_name.map(str::trim).filter(|s| !s.is_empty()) {
             Some(name) => name.to_string(),
-            None => self.config.effective_default_profile_name(),
+            None => self
+                .active_profile
+                .clone()
+                .unwrap_or_else(|| self.config.effective_default_profile_name()),
         }
     }
 
@@ -1254,23 +1270,57 @@ impl SessionManager {
             return None;
         }
 
-        let client = crate::daemon::client::DaemonClient::new(profile.to_string());
-        match client.send_cdp(method, params).await {
-            Ok(value) => Some(Ok(value)),
-            Err(ActionbookError::DaemonNotRunning(msg)) => {
-                // Pre-send failure: daemon unreachable or write failed before the
-                // command was delivered. Safe to fall back to direct WS.
-                tracing::debug!("Daemon not reachable, falling back to direct WS: {}", msg);
-                None
+        // Retry loop: the daemon socket may be up before it has attached to a
+        // browser target (WS connect + resolve target + attach takes time).
+        // "No target attached" means the command was never forwarded — safe to retry.
+        // Budget: 15 × 300ms = 4.5s, aligned with ensure_daemon's 5s startup timeout.
+        let max_retries = 14;
+        let mut last_err = None;
+
+        for attempt in 0..=max_retries {
+            if attempt > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
             }
-            Err(e) => {
-                // Post-send failure (DaemonError): the command may have already been
-                // forwarded to the browser. Do NOT fall back — that would risk
-                // duplicating non-idempotent operations (click, navigate, etc.).
-                tracing::warn!("Daemon error after command may have been sent: {}", e);
-                Some(Err(e))
+
+            let client = crate::daemon::client::DaemonClient::new(profile.to_string());
+            match client.send_cdp(method, params.clone()).await {
+                Ok(value) => return Some(Ok(value)),
+                Err(ActionbookError::DaemonNotRunning(msg)) => {
+                    // Pre-send failure: daemon unreachable or write failed before the
+                    // command was delivered. Safe to fall back to direct WS.
+                    tracing::debug!("Daemon not reachable, falling back to direct WS: {}", msg);
+                    return None;
+                }
+                Err(ref e) if e.to_string().contains("No target attached") => {
+                    // Daemon received the request but hasn't attached to a browser
+                    // target yet. The command was NOT forwarded — safe to retry.
+                    tracing::debug!(
+                        "Daemon target not ready (attempt {}/{}), retrying...",
+                        attempt + 1,
+                        max_retries + 1
+                    );
+                    last_err = Some(ActionbookError::DaemonError(e.to_string()));
+                    continue;
+                }
+                Err(e) => {
+                    // Post-send failure (DaemonError): the command may have already been
+                    // forwarded to the browser. Do NOT fall back — that would risk
+                    // duplicating non-idempotent operations (click, navigate, etc.).
+                    tracing::warn!("Daemon error after command may have been sent: {}", e);
+                    return Some(Err(e));
+                }
             }
         }
+
+        // All retries exhausted — fall back to direct WS
+        tracing::warn!(
+            "Daemon target not ready after {} retries, falling back to direct WS",
+            max_retries + 1,
+        );
+        if let Some(err) = last_err {
+            tracing::debug!("Last daemon error: {}", err);
+        }
+        None
     }
 
     async fn send_cdp_command_over_page_ws(
@@ -3971,6 +4021,7 @@ mod tests {
             sessions_dir: dir.to_path_buf(),
             stealth_config: None,
             daemon_enabled: false,
+            active_profile: None,
         }
     }
 
@@ -4004,6 +4055,7 @@ mod tests {
             sessions_dir: sessions_dir.clone(),
             stealth_config: None,
             daemon_enabled: false,
+            active_profile: None,
         };
 
         assert!(!sessions_dir.exists());
@@ -4271,6 +4323,7 @@ mod tests {
             sessions_dir: dir.path().to_path_buf(),
             stealth_config: None,
             daemon_enabled: false,
+            active_profile: None,
         };
 
         let status = sm.get_status(None).await;
@@ -4278,6 +4331,47 @@ mod tests {
             status,
             SessionStatus::NotRunning { profile } if profile == "team-default"
         ));
+    }
+
+    #[test]
+    fn active_profile_overrides_config_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut sm = test_session_manager(dir.path());
+
+        // Without active_profile, resolve_profile_name(None) uses config default
+        assert_eq!(sm.resolve_profile_name(None), "actionbook");
+
+        // With active_profile set, resolve_profile_name(None) uses it instead
+        sm.set_active_profile("twitter");
+        assert_eq!(sm.resolve_profile_name(None), "twitter");
+    }
+
+    #[test]
+    fn explicit_profile_name_overrides_active_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut sm = test_session_manager(dir.path());
+        sm.set_active_profile("twitter");
+
+        // Explicit profile_name always wins over active_profile
+        assert_eq!(sm.resolve_profile_name(Some("arxiv")), "arxiv");
+    }
+
+    #[test]
+    fn active_profile_does_not_affect_explicit_profile_routing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut sm = test_session_manager(dir.path());
+
+        sm.save_external_session("twitter", 9401, "ws://127.0.0.1:9401/devtools/browser/aaa")
+            .unwrap();
+        sm.save_external_session("arxiv", 9402, "ws://127.0.0.1:9402/devtools/browser/bbb")
+            .unwrap();
+
+        sm.set_active_profile("twitter");
+
+        // Explicit profile loads its own session, not the active one
+        let arxiv_state = sm.load_session_state("arxiv").unwrap();
+        assert_eq!(arxiv_state.cdp_port, 9402);
+        assert_eq!(arxiv_state.cdp_url, "ws://127.0.0.1:9402/devtools/browser/bbb");
     }
 }
 

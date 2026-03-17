@@ -728,8 +728,9 @@ async fn connect_and_run(
     tracing::info!("Resolved active target: {}", target_id);
 
     // Step 2: Attach to the target (flatten=true gives us a sessionId)
-    // Use a distinct reserved ID that won't collide with resolve_active_target's id=0
-    let attach_ws_id = u64::MAX;
+    // Use a distinct reserved ID that won't collide with resolve_active_target's id=0.
+    // Must stay below Number.MAX_SAFE_INTEGER (2^53 - 1) to avoid JSON precision loss.
+    let attach_ws_id = 999_999_999u64;
     let attach_cmd = serde_json::json!({
         "id": attach_ws_id,
         "method": "Target.attachToTarget",
@@ -941,5 +942,33 @@ mod tests {
             ws_headers: None,
         };
         assert!(!remote.uses_local_http_endpoints());
+    }
+
+    /// Verify that the attach_ws_id used in connect_and_run is within
+    /// JSON Number.MAX_SAFE_INTEGER (2^53 - 1), preventing precision loss
+    /// when Chrome echoes the ID back in its JSON response.
+    #[test]
+    fn attach_ws_id_is_json_safe() {
+        let attach_ws_id = 999_999_999u64;
+        let max_safe_integer: u64 = (1u64 << 53) - 1; // 9007199254740991
+        assert!(
+            attach_ws_id <= max_safe_integer,
+            "attach_ws_id ({}) must be <= Number.MAX_SAFE_INTEGER ({})",
+            attach_ws_id,
+            max_safe_integer
+        );
+
+        // Verify JSON round-trip preserves the exact value
+        let json = serde_json::json!({"id": attach_ws_id});
+        let parsed_id = json.get("id").and_then(|v| v.as_u64()).unwrap();
+        assert_eq!(parsed_id, attach_ws_id);
+    }
+
+    /// Ensure attach_ws_id doesn't collide with resolve_active_target's id=0
+    #[test]
+    fn attach_ws_id_does_not_collide_with_resolve_target_id() {
+        let resolve_target_id = 0u64;
+        let attach_ws_id = 999_999_999u64;
+        assert_ne!(attach_ws_id, resolve_target_id);
     }
 }

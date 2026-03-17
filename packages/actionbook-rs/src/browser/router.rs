@@ -50,6 +50,7 @@ impl BrowserDriver {
         if cli.headless {
             profile.headless = true;
         }
+        // from_config reads cli.profile to set active_profile on SessionManager
         Self::from_config(&config, &profile, cli).await
     }
 
@@ -75,10 +76,20 @@ impl BrowserDriver {
                 .unwrap_or_default()
         };
 
+        // Resolve the effective profile name from CLI flags / config defaults
+        let active_profile = cli
+            .profile
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| config.effective_default_profile_name());
+
         match backend {
             BrowserBackend::Cdp => {
                 let mut session_mgr = SessionManager::new(config.clone());
                 session_mgr.set_daemon_enabled(!cli.no_daemon);
+                session_mgr.set_active_profile(&active_profile);
                 Ok(Self::Cdp(session_mgr))
             }
             #[cfg(feature = "camoufox")]
