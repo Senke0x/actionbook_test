@@ -7,6 +7,7 @@
 
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
+import { isActionbookError } from "@actionbookdev/sdk";
 import { ApiClient } from "./lib/api-client.js";
 
 const DEFAULT_API_URL = "https://api.actionbook.dev";
@@ -48,6 +49,30 @@ type ActionbookPluginConfig = {
   apiUrl?: string;
 };
 
+const PRIVATE_IP_RANGES = [
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^::1$/,
+  /^fe80:/i,
+  /^fc00:/i,
+  /^fd00:/i,
+];
+
+function isPrivateHost(hostname: string): boolean {
+  if (
+    hostname === "localhost" ||
+    hostname === "[::1]" ||
+    hostname.endsWith(".local")
+  ) {
+    return true;
+  }
+  return PRIVATE_IP_RANGES.some((re) => re.test(hostname));
+}
+
 function resolveApiUrl(value: unknown): string {
   if (value == null || value === "") {
     return DEFAULT_API_URL;
@@ -56,11 +81,50 @@ function resolveApiUrl(value: unknown): string {
     throw new Error("actionbook: apiUrl must be a string");
   }
 
+  let parsed: URL;
   try {
-    return new URL(value).toString().replace(/\/$/, "");
+    parsed = new URL(value);
   } catch {
     throw new Error(`actionbook: invalid apiUrl "${value}"`);
   }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(
+      `actionbook: apiUrl must use http or https, got "${parsed.protocol}"`
+    );
+  }
+
+  if (isPrivateHost(parsed.hostname)) {
+    throw new Error(
+      `actionbook: apiUrl must not point to private/local addresses, got "${parsed.hostname}"`
+    );
+  }
+
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function formatToolError(action: string, error: unknown) {
+  if (isActionbookError(error)) {
+    // Upstream SDK errors already have structured info — pass through markdown
+    // errors and provide error code in details for agent observability
+    const text = error.message.startsWith("## ")
+      ? error.message
+      : `## Error\n\nFailed to ${action}: ${error.message}`;
+    return {
+      content: [{ type: "text" as const, text }],
+      details: { error: error.message, code: error.code },
+    };
+  }
+  const message = error instanceof Error ? error.message : "Unknown error";
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `## Error\n\nFailed to ${action}: ${message}`,
+      },
+    ],
+    details: { error: message },
+  };
 }
 
 const actionbookPlugin = {
@@ -70,9 +134,30 @@ const actionbookPlugin = {
     "Token-efficient browser automation with pre-verified selectors from Actionbook",
 
   register(api: OpenClawPluginApi) {
-    const pluginConfig = (api.pluginConfig ?? {}) as ActionbookPluginConfig;
+    let pluginConfig: ActionbookPluginConfig;
+    try {
+      const raw = api.pluginConfig ?? {};
+      if (typeof raw !== "object" || raw === null) {
+        throw new Error("actionbook: pluginConfig must be an object");
+      }
+      pluginConfig = raw as ActionbookPluginConfig;
+    } catch (err) {
+      api.logger.error(
+        `Actionbook plugin config error: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
+
     const apiKey = pluginConfig.apiKey ?? "";
-    const apiUrl = resolveApiUrl(pluginConfig.apiUrl);
+    let apiUrl: string;
+    try {
+      apiUrl = resolveApiUrl(pluginConfig.apiUrl);
+    } catch (err) {
+      api.logger.error(
+        `Actionbook plugin URL error: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
 
     const client = new ApiClient(apiUrl, {
       apiKey,
@@ -157,17 +242,7 @@ const actionbookPlugin = {
             details: { query: params.query, domain: params.domain },
           };
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Unknown error";
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `## Error\n\nFailed to search actions: ${message}`,
-              },
-            ],
-            details: { error: message },
-          };
+          return formatToolError("search actions", error);
         }
       },
     });
@@ -198,24 +273,7 @@ const actionbookPlugin = {
             details: { area_id: params.area_id },
           };
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Unknown error";
-          // Pass through upstream markdown errors directly
-          if (message.startsWith("## ")) {
-            return {
-              content: [{ type: "text" as const, text: message }],
-              details: { error: message },
-            };
-          }
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `## Error\n\nFailed to get action: ${message}`,
-              },
-            ],
-            details: { error: message },
-          };
+          return formatToolError("get action", error);
         }
       },
     });
