@@ -11,7 +11,7 @@ describe("package metadata", () => {
   it("uses a stable package identity and built plugin entrypoint", () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
 
-    expect(packageJson.name).toBe("@actionbookdev/actionbook");
+    expect(packageJson.name).toBe("@actionbookdev/openclaw-plugin");
     expect(packageJson.openclaw.extensions).toEqual(["./dist/index.js"]);
     expect(packageJson.files).toEqual(
       expect.arrayContaining(["dist", "skills", "openclaw.plugin.json"])

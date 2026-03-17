@@ -1,5 +1,5 @@
 {
-  "name": "@actionbookdev/actionbook",
+  "name": "@actionbookdev/openclaw-plugin",
   "version": "0.1.0",
   "private": false,
   "type": "module",
