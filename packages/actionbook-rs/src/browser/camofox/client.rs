@@ -259,11 +259,17 @@ impl CamofoxClient {
 
     /// Get the active tab ID for a session
     pub async fn get_active_tab(&self, session_key: &str) -> Result<Option<String>> {
-        let url = format!("{}/sessions/{}/active-tab", self.base_url, session_key);
+        let url = format!("{}/sessions/active-tab", self.base_url);
 
-        let response = self.client.get(&url).send().await.map_err(|e| {
-            ActionbookError::BrowserOperation(format!("Failed to get active tab: {}", e))
-        })?;
+        let response = self
+            .client
+            .get(&url)
+            .header("X-Session-Key", session_key)
+            .send()
+            .await
+            .map_err(|e| {
+                ActionbookError::BrowserOperation(format!("Failed to get active tab: {}", e))
+            })?;
 
         if response.status() == StatusCode::NOT_FOUND {
             // No active tab for this session
