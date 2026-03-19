@@ -242,6 +242,25 @@ async fn create_browser_driver(cli: &Cli, config: &Config) -> Result<BrowserDriv
     BrowserDriver::from_config(config, profile, cli).await
 }
 
+async fn should_use_driver_new_page(
+    session_manager: &SessionManager,
+    profile_name: &str,
+) -> bool {
+    if !session_manager.session_uses_remote_ws(Some(profile_name)) {
+        return false;
+    }
+
+    if session_manager.is_session_reachable(profile_name).await {
+        return true;
+    }
+
+    tracing::debug!(
+        "Saved remote session for profile '{}' is unreachable; falling back to session recreation",
+        profile_name
+    );
+    false
+}
+
 /// Apply resource blocking based on CLI flags (--block-images, --block-media)
 async fn apply_resource_blocking(cli: &Cli, driver: &mut BrowserDriver) {
     let level = if cli.block_media {
@@ -605,6 +624,15 @@ async fn try_open_on_initial_blank_page(
 
     if pages.len() != 1 || !is_reusable_initial_blank_page_url(&pages[0].url) {
         return Ok(None);
+    }
+
+    #[cfg(feature = "stealth")]
+    if session_manager.is_stealth_enabled() {
+        if let Err(e) = session_manager.apply_stealth_to_active_page(profile_name).await {
+            tracing::warn!("Failed to apply stealth profile before navigating blank tab: {}", e);
+        } else {
+            tracing::info!("Applied stealth profile to reused blank tab");
+        }
     }
 
     match timeout(
@@ -1180,61 +1208,41 @@ pub(crate) async fn open(cli: &Cli, config: &Config, url: &str, new_window: bool
     }
 
     let session_manager = create_session_manager(cli, config);
-    let profile_arg = effective_profile_arg(cli, config);
+    let profile_name = effective_profile_name(cli, config);
+    let profile_arg = Some(profile_name);
 
-    // Remote sessions with auth headers (wss:// + -H) cannot use chromiumoxide Browser::connect
-    // because it doesn't support custom WS headers. Use CDP commands directly instead.
-    let is_remote = session_manager.is_remote_session(profile_arg).await;
+    let use_driver_new_page = should_use_driver_new_page(&session_manager, profile_name).await;
 
-    let title = if is_remote {
-        // Remote path: all operations go through send_cdp_command which supports ws_headers
+    let title = if use_driver_new_page {
+        let mut driver = create_browser_driver(cli, config).await?;
+        driver.new_page(Some(&normalized_url), false).await?;
 
-        if !new_window {
-            // Try to reuse the initial blank tab
-            if let Some(title) =
-                match try_open_on_initial_blank_page(&session_manager, profile_arg, &normalized_url)
-                    .await
-                {
-                    Ok(title) => title,
-                    Err(e) => {
-                        tracing::debug!(
-                            "Failed to reuse initial blank tab, opening a new tab: {}",
-                            e
-                        );
-                        None
-                    }
-                }
-            {
-                persist_active_page(&session_manager, profile_arg).await;
+        let _ = wait_for_document_complete(&session_manager, profile_arg, 30_000).await;
 
-                if cli.json {
-                    println!(
-                        "{}",
-                        serde_json::json!({
-                            "success": true,
-                            "url": normalized_url,
-                            "title": title
-                        })
-                    );
-                } else {
-                    println!("{} {} (remote)", "✓".green(), title.bold());
-                    println!("  {}", normalized_url.dimmed());
-                }
-                return Ok(());
-            }
-        }
+        // Persist active page ID so the daemon can route to the correct tab
+        persist_active_page(&session_manager, profile_arg).await;
 
-        // Open new tab/window via CDP Target.createTarget
-        let page_info = match timeout(
-            Duration::from_secs(30),
-            session_manager.new_page(profile_arg, Some(&normalized_url), new_window),
+        match timeout(
+            Duration::from_secs(5),
+            session_manager.eval_on_page(profile_arg, "document.title"),
         )
         .await
         {
-            Ok(Ok(info)) => info,
+            Ok(Ok(value)) => value.as_str().unwrap_or("").to_string(),
+            _ => String::new(),
+        }
+    } else {
+        let (browser, mut handler) = session_manager.get_or_create_session(profile_arg).await?;
+
+        // Spawn handler in background
+        tokio::spawn(async move { while handler.next().await.is_some() {} });
+
+        // Navigate to URL with timeout (30 seconds for page creation)
+        let page = match timeout(Duration::from_secs(30), browser.new_page(&normalized_url)).await {
+            Ok(Ok(page)) => page,
             Ok(Err(e)) => {
                 return Err(ActionbookError::Other(format!(
-                    "Failed to open page on remote browser: {}",
+                    "Failed to open page: {}",
                     e
                 )));
             }
@@ -1246,121 +1254,28 @@ pub(crate) async fn open(cli: &Cli, config: &Config, url: &str, new_window: bool
             }
         };
 
-        persist_active_page(&session_manager, profile_arg).await;
-        page_info.title
-    } else {
-        // Local path: use chromiumoxide Browser for full page lifecycle
-        let (browser, mut handler) = session_manager.get_or_create_session(profile_arg).await?;
-
-        // Spawn handler in background
-        tokio::spawn(async move { while handler.next().await.is_some() {} });
-
-        // Only try to reuse the initial blank tab when NOT opening a new window.
-        // --new-window must always create a separate window via Target.createTarget.
-        if !new_window {
-            if let Some(title) =
-                match try_open_on_initial_blank_page(&session_manager, profile_arg, &normalized_url)
-                    .await
-                {
-                    Ok(title) => title,
-                    Err(e) => {
-                        tracing::debug!(
-                            "Failed to reuse initial blank tab, opening a new tab: {}",
-                            e
-                        );
-                        None
-                    }
-                }
-            {
-                // Persist active page ID so the daemon can route to the correct tab
-                persist_active_page(&session_manager, profile_arg).await;
-
-                if cli.json {
-                    println!(
-                        "{}",
-                        serde_json::json!({
-                            "success": true,
-                            "url": normalized_url,
-                            "title": title
-                        })
-                    );
-                } else {
-                    println!("{} {}", "✓".green(), title.bold());
-                    println!("  {}", normalized_url.dimmed());
-                }
-                return Ok(());
+        // Apply stealth profile if enabled
+        #[cfg(feature = "stealth")]
+        if cli.stealth {
+            let stealth_profile =
+                build_stealth_profile(cli.stealth_os.as_deref(), cli.stealth_gpu.as_deref());
+            if let Err(e) = apply_stealth_to_page(&page, &stealth_profile).await {
+                tracing::warn!("Failed to apply stealth profile: {}", e);
+            } else {
+                tracing::info!("Applied stealth profile to page");
             }
         }
 
-        // Navigate to URL with timeout (30 seconds for page creation)
-        // When new_window is true, use SessionManager to send Target.createTarget with newWindow: true
-        if new_window {
-            let page_info = match timeout(
-                Duration::from_secs(30),
-                session_manager.new_page(profile_arg, Some(&normalized_url), true),
-            )
-            .await
-            {
-                Ok(Ok(info)) => info,
-                Ok(Err(e)) => {
-                    return Err(ActionbookError::Other(format!(
-                        "Failed to open new window: {}",
-                        e
-                    )));
-                }
-                Err(_) => {
-                    return Err(ActionbookError::Timeout(format!(
-                        "New window timed out after 30 seconds: {}",
-                        normalized_url
-                    )));
-                }
-            };
+        // Wait for page to fully load (additional 30 seconds)
+        let _ = timeout(Duration::from_secs(30), page.wait_for_navigation()).await;
 
-            // Persist active page ID so the daemon can route to the correct tab
-            persist_active_page(&session_manager, profile_arg).await;
+        // Persist active page ID so the daemon can route to the correct tab
+        persist_active_page(&session_manager, profile_arg).await;
 
-            page_info.title
-        } else {
-            let page =
-                match timeout(Duration::from_secs(30), browser.new_page(&normalized_url)).await {
-                    Ok(Ok(page)) => page,
-                    Ok(Err(e)) => {
-                        return Err(ActionbookError::Other(format!(
-                            "Failed to open page: {}",
-                            e
-                        )));
-                    }
-                    Err(_) => {
-                        return Err(ActionbookError::Timeout(format!(
-                            "Page load timed out after 30 seconds: {}",
-                            normalized_url
-                        )));
-                    }
-                };
-
-            // Apply stealth profile if enabled
-            #[cfg(feature = "stealth")]
-            if cli.stealth {
-                let stealth_profile =
-                    build_stealth_profile(cli.stealth_os.as_deref(), cli.stealth_gpu.as_deref());
-                if let Err(e) = apply_stealth_to_page(&page, &stealth_profile).await {
-                    tracing::warn!("Failed to apply stealth profile: {}", e);
-                } else {
-                    tracing::info!("Applied stealth profile to page");
-                }
-            }
-
-            // Wait for page to fully load (additional 30 seconds)
-            let _ = timeout(Duration::from_secs(30), page.wait_for_navigation()).await;
-
-            // Persist active page ID so the daemon can route to the correct tab
-            persist_active_page(&session_manager, profile_arg).await;
-
-            // Get page title with timeout
-            match timeout(Duration::from_secs(5), page.get_title()).await {
-                Ok(Ok(Some(t))) => t,
-                _ => String::new(),
-            }
+        // Get page title with timeout
+        match timeout(Duration::from_secs(5), page.get_title()).await {
+            Ok(Ok(Some(t))) => t,
+            _ => String::new(),
         }
     };
 
@@ -1374,7 +1289,11 @@ pub(crate) async fn open(cli: &Cli, config: &Config, url: &str, new_window: bool
             })
         );
     } else {
-        println!("{} {}", "✓".green(), title.bold());
+        if title.is_empty() {
+            println!("{} Opened new tab", "✓".green());
+        } else {
+            println!("{} {}", "✓".green(), title.bold());
+        }
         println!("  {}", normalized_url.dimmed());
     }
 
@@ -6168,9 +6087,12 @@ pub(crate) async fn switch_frame(cli: &Cli, config: &Config, target: &str) -> Re
 mod tests {
     use super::{
         effective_profile_name, is_reusable_initial_blank_page_url, normalize_navigation_url,
+        should_use_driver_new_page,
     };
+    use crate::browser::{BrowserDriver, SessionManager};
     use crate::cli::{BrowserCommands, BrowserMode, Cli, Commands};
     use crate::config::Config;
+    use tempfile::tempdir;
 
     fn test_cli(profile: Option<&str>, command: BrowserCommands) -> Cli {
         Cli {
@@ -6469,5 +6391,66 @@ mod tests {
             }
             Ok(_) => panic!("Expected error for unknown profile without --cdp"),
         }
+    }
+
+    #[tokio::test]
+    async fn create_browser_driver_propagates_stealth_config_to_cdp_backend() {
+        let mut cli = test_cli(Some("adhoc-test-profile"), BrowserCommands::Status);
+        cli.cdp = Some("9999".to_string());
+        cli.browser_mode = Some(BrowserMode::Isolated);
+        cli.stealth = true;
+        let config = Config::default();
+
+        let driver = super::create_browser_driver(&cli, &config).await.unwrap();
+        match driver {
+            BrowserDriver::Cdp(session_manager) => {
+                assert!(session_manager.is_stealth_enabled());
+            }
+            #[cfg(feature = "camoufox")]
+            _ => panic!("Expected CDP backend"),
+        }
+    }
+
+    #[tokio::test]
+    async fn should_use_driver_new_page_for_reachable_remote_session_without_headers() {
+        let dir = tempdir().unwrap();
+        let config = Config::default();
+        let sm = SessionManager::with_sessions_dir(config, dir.path().to_path_buf());
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let _ = tokio_tungstenite::accept_async(stream).await.unwrap();
+        });
+
+        let ws_url = format!("ws://127.0.0.1:{port}/automation");
+        sm.save_external_session_full("team", 9222, &ws_url, None, None)
+            .unwrap();
+
+        assert!(should_use_driver_new_page(&sm, "team").await);
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn should_not_use_driver_new_page_for_unreachable_remote_session() {
+        let dir = tempdir().unwrap();
+        let config = Config::default();
+        let sm = SessionManager::with_sessions_dir(config, dir.path().to_path_buf());
+
+        sm.save_external_session_full(
+            "team",
+            9222,
+            "ws://127.0.0.1:9/automation",
+            None,
+            Some(std::collections::HashMap::from([(
+                "x-test-auth".to_string(),
+                "secret".to_string(),
+            )])),
+        )
+        .unwrap();
+
+        assert!(!should_use_driver_new_page(&sm, "team").await);
     }
 }
