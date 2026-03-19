@@ -65,7 +65,7 @@ function registerAndCapture(
 }
 
 describe("plugin registration", () => {
-  it("registers tools and prompt guidance without info log noise", async () => {
+  it("registers tools without info log noise", () => {
     const registerTool = vi.fn();
     const on = vi.fn();
     const logger = {
@@ -84,14 +84,7 @@ describe("plugin registration", () => {
     );
 
     expect(logger.info).not.toHaveBeenCalled();
-    expect(on).toHaveBeenCalledTimes(1);
-    expect(on.mock.calls[0]?.[0]).toBe("before_prompt_build");
-
-    const beforePromptBuild = on.mock.calls[0]?.[1];
-    const result = await beforePromptBuild?.({}, {});
-    expect(result).toMatchObject({
-      prependSystemContext: expect.stringContaining("Actionbook Browser Automation"),
-    });
+    expect(on).not.toHaveBeenCalled();
 
     expect(registerTool).toHaveBeenCalledTimes(2);
     expect(registerTool.mock.calls.map(([tool]) => tool.name)).toEqual([

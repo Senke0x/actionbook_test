@@ -11,10 +11,6 @@ import { isActionbookError } from "@actionbookdev/sdk";
 import { ApiClient } from "./lib/api-client.js";
 
 const DEFAULT_API_URL = "https://api.actionbook.dev";
-const ACTIONBOOK_GUIDANCE = [
-  "## Actionbook Browser Automation",
-  "When the user needs to interact with any website, call `search_actions` BEFORE taking page snapshots. Use `get_action_by_area_id` to get pre-verified selectors from the results.",
-].join("\n");
 const SEARCH_ACTIONS_DESCRIPTION = `Search for website action manuals by keyword.
 
 Use this tool to find actions, page elements, and their selectors for browser automation.
@@ -167,16 +163,6 @@ const actionbookPlugin = {
       apiKey,
       timeoutMs: 30000,
       retry: { maxRetries: 3, retryDelay: 1000 },
-    });
-
-    // ========================================================================
-    // Lifecycle: inject Actionbook workflow guidance into agent context
-    // ========================================================================
-
-    api.on("before_prompt_build", async () => {
-      return {
-        prependSystemContext: ACTIONBOOK_GUIDANCE,
-      };
     });
 
     // ========================================================================
