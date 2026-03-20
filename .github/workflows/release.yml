@@ -162,7 +162,6 @@ jobs:
             --arg desc "$DESCRIPTION" \
             '{
               "username": "Actionbook Release",
-              "avatar_url": "https://avatars.githubusercontent.com/u/186498528",
               "embeds": [{
                 "title": "New Release: npm Packages Published 🎉",
                 "url": "https://www.npmjs.com/org/actionbookdev",

@@ -86,7 +86,6 @@ jobs:
             --arg footer "${RELEASE_TYPE} Changelog" \
             '{
               "username": "Actionbook Release",
-              "avatar_url": "https://avatars.githubusercontent.com/u/186498528",
               "embeds": [{
                 "title": $title,
                 "url": $url,
