@@ -45,38 +45,6 @@ See how Actionbook enables an agent to complete an Airbnb search task 10x faster
 
 https://github.com/user-attachments/assets/9f896fe7-296a-44b3-8592-931a099612de
 
-## Popular X/Twitter Workflows
-
-A large share of first-time users come to Actionbook for X/Twitter automation. The README should reflect that.
-
-With the Actionbook skill, your agent can reliably handle workflows like:
-
-- Post a tweet with text, media, or links
-- Reply to a tweet
-- Search X/Twitter and open result threads
-- Navigate timelines, profiles, notifications, and compose flows
-- Work inside your existing logged-in browser session
-
-Example prompts:
-
-```text
-Use Actionbook to post a tweet with this copy and attached image.
-```
-
-```text
-Use Actionbook to reply to the latest tweet from this account.
-```
-
-```text
-Use Actionbook to search X for "browser automation" and open the top 5 relevant posts.
-```
-
-The Actionbook skill already includes X/Twitter-oriented query patterns such as:
-
-```bash
-actionbook search "twitter compose new tweet post with image media attachment"
-```
-
 ## Quick Start
 
 Get started with Actionbook in under 2 minutes:
@@ -126,19 +94,12 @@ More examples:
 
 Use Actionbook in the way that fits your agent stack:
 
-- **CLI** for direct local usage
-- **Skills** for better agent behavior and lower hallucination risk
-- **MCP Server** for Cursor, Claude Code, VS Code, and similar clients
-- **JavaScript SDK** for custom integrations
-
-Resources:
-
-- [Installation Guide](https://actionbook.dev/docs/guides/installation)
-- [Browser Automation Guide](https://actionbook.dev/docs/guides/browser)
-- [MCP Server Guide](https://actionbook.dev/docs/guides/mcp-server)
-- [SDK Integration Guide](https://actionbook.dev/docs/guides/sdk-integration)
-- [CLI Reference](https://actionbook.dev/docs/api-reference/cli)
-- [MCP Tools Reference](https://actionbook.dev/docs/api-reference/mcp-tools)
+- **[CLI](https://actionbook.dev/docs/api-reference/cli)** for direct local usage, browser operations, and setup.
+- **[Skills](https://actionbook.dev/docs/guides/skills)** for better agent behavior and lower hallucination risk.
+- **[OpenClaw Plugin](https://actionbook.dev/docs/openclaw)** for OpenClaw-based agent workflows with Actionbook.
+- **[Dify Plugin](https://actionbook.dev/docs/guides/dify-plugin)** for using Actionbook selectors and browser automation inside Dify workflows.
+- **[MCP Server](https://actionbook.dev/docs/guides/mcp-server)** for Cursor, Claude Code, VS Code, and similar clients.
+- **[JavaScript SDK](https://actionbook.dev/docs/guides/sdk-integration)** for custom integrations and programmatic use.
 
 
 ## Stay tuned
