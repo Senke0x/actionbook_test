@@ -9,7 +9,7 @@
 
 
 
-**Browser Action Engine for AI Agents**
+**The Highest Accuracy Browser Automation Engine for AI Agents**
 <br />
 Actionbook provides up-to-date action manuals and DOM structure,
 <br />
@@ -20,16 +20,6 @@ so your agent operates any website instantly without guessing.
 </div>
 
 <br />
-
-## Table of Contents
-
-- [Why Actionbook?](#why-actionbook)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Examples](#examples)
-- [Available Tools](#available-tools)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
 
 ## Why Actionbook?
 
@@ -49,49 +39,49 @@ Actionbook places up-to-date action manuals with the relevant DOM selectors dire
 - **10x Faster:** Agents access pre-computed "Action manuals" to know exactly what to do without exploring.
 - **100x Token Savings:** Instead of whole HTML page, agents receive only related DOM elements in concise, semantic JSON definitions.
 - **Resilient Automation:** Action manuals are maintained and versioned. If a site changes, the manual is updated, not your agent.
-- **Universal Compatibility:** Works with any LLM (OpenAI, Anthropic, Gemini) and any AI operator framework.
+- **Universal Compatibility:** Works with any agent stack, including Claude Code, Codex, OpenClaw, and browser automation frameworks.
 
 See how Actionbook enables an agent to complete an Airbnb search task 10x faster.
 
 https://github.com/user-attachments/assets/9f896fe7-296a-44b3-8592-931a099612de
 
+## Popular X/Twitter Workflows
+
+A large share of first-time users come to Actionbook for X/Twitter automation. The README should reflect that.
+
+With the Actionbook skill, your agent can reliably handle workflows like:
+
+- Post a tweet with text, media, or links
+- Reply to a tweet
+- Search X/Twitter and open result threads
+- Navigate timelines, profiles, notifications, and compose flows
+- Work inside your existing logged-in browser session
+
+Example prompts:
+
+```text
+Use Actionbook to post a tweet with this copy and attached image.
+```
+
+```text
+Use Actionbook to reply to the latest tweet from this account.
+```
+
+```text
+Use Actionbook to search X for "browser automation" and open the top 5 relevant posts.
+```
+
+The Actionbook skill already includes X/Twitter-oriented query patterns such as:
+
+```bash
+actionbook search "twitter compose new tweet post with image media attachment"
+```
+
 ## Quick Start
 
 Get started with Actionbook in under 2 minutes:
 
-**Step 1: Install the CLI**
-
-macOS / Linux
-```bash
-curl -fsSL https://actionbook.dev/install.sh | bash
-```
-
-Windows (PowerShell)
-```
-irm https://actionbook.dev/install.ps1 | iex
-```
-
-The Rust-based CLI uses your existing system browser (Chrome, Brave, Edge, Arc, Chromium), so no extra browser install step is required.
-
-**Step 2: Use with any AI Agent**
-
-When working with any AI coding assistant (Claude Code, Cursor, etc.), add this to your prompt:
-
-```
-Use Actionbook to understand and operate the web page.
-```
-
-The agent will automatically use the CLI to fetch action manuals and execute browser operations.
-
-**Step 3 (Optional): Add the Skill**
-
-For enhanced agent integration, add the Actionbook skill:
-
-```bash
-npx skills add actionbook/actionbook
-```
-
-## Installation
+### 1. Install the CLI
 
 ### macOS / Linux
 
@@ -105,38 +95,51 @@ curl -fsSL https://actionbook.dev/install.sh | bash
 irm https://actionbook.dev/install.ps1 | iex
 ```
 
-### npm
+### 2. Add one or more skills to your agent
 
 ```bash
-npm install -g @actionbookdev/cli
+npx skills add actionbook/actionbook
 ```
 
-### Setup
+Skill support list:
 
-```bash
-actionbook setup
-```
+- `actionbook`: the core browser-operation workflow. Best for browsing posts on X/Twitter and Reddit, collecting post and comment data, filling email flows and complex forms, and handling general page operations with less selector guesswork.
+- `active-research`: a deep research workflow for multi-source browsing, structured collection, and long-form report generation.
+- `extract`: a data extraction workflow that uses Actionbook selectors first, then generates a reusable Playwright script and structured output such as JSON or CSV.
 
-For more install options (Homebrew, from source) and upgrade instructions, see the [Installation Guide](https://actionbook.dev/docs/guides/installation).
+## Example Use Cases
 
-The CLI is all you need to get started. For advanced use cases, Actionbook also offers an [MCP Server](https://actionbook.dev/docs/guides/mcp-server) and [JavaScript SDK](https://actionbook.dev/docs/guides/sdk-integration).
+Actionbook playgrounds in this repo:
 
+- [`actionbook-scraper`](./playground/actionbook-scraper): generate reliable web scrapers with verified selectors and automatic validation
+- [`article-exporter`](./playground/article-exporter): export web articles into clean structured content for downstream processing and publishing workflows
+- [`deep-research`](./playground/deep-research): multi-source browsing, analysis, and report generation with Actionbook
+- [`arxiv-viewer`](./playground/arxiv-viewer): search, read, and analyze arXiv papers with a hybrid API + browser workflow
+- [`lib-rs-scraper`](./playground/lib-rs-scraper): scrape lib.rs using Actionbook-verified selectors
+- [`rust-learner`](./playground/rust-learner): query Rust language features and crate updates with browser-assisted workflows
 
-## Examples
+More examples:
 
-Explore real-world examples in the [Examples Documentation](https://actionbook.dev/docs/examples).
+- [Examples Documentation](https://actionbook.dev/docs/examples)
 
+## Integration Options
 
-## Available Tools
+Use Actionbook in the way that fits your agent stack:
 
-Actionbook provides tools for searching and retrieving action manuals. See the [CLI Reference](https://actionbook.dev/docs/api-reference/cli) for the full command list. If you're using the MCP integration, see the [MCP Tools Reference](https://actionbook.dev/docs/api-reference/mcp-tools).
+- **CLI** for direct local usage
+- **Skills** for better agent behavior and lower hallucination risk
+- **MCP Server** for Cursor, Claude Code, VS Code, and similar clients
+- **JavaScript SDK** for custom integrations
 
+Resources:
 
-## Documentation
+- [Installation Guide](https://actionbook.dev/docs/guides/installation)
+- [Browser Automation Guide](https://actionbook.dev/docs/guides/browser)
+- [MCP Server Guide](https://actionbook.dev/docs/guides/mcp-server)
+- [SDK Integration Guide](https://actionbook.dev/docs/guides/sdk-integration)
+- [CLI Reference](https://actionbook.dev/docs/api-reference/cli)
+- [MCP Tools Reference](https://actionbook.dev/docs/api-reference/mcp-tools)
 
-For comprehensive guides, API references, and tutorials, visit our documentation site:
-
-**[actionbook.dev/docs](https://actionbook.dev/docs)**
 
 ## Stay tuned
 
