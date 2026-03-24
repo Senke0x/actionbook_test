@@ -6,7 +6,6 @@
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/actionbook/actionbook) [![NPM Downloads](https://img.shields.io/npm/d18m/%40actionbookdev%2Fcli)](https://www.npmjs.com/package/@actionbookdev/cli) [![npm version](https://img.shields.io/npm/v/%40actionbookdev%2Fcli)](https://www.npmjs.com/package/@actionbookdev/cli) [![skills](https://img.shields.io/badge/skills-ready-blue)](https://skills.sh/actionbook/actionbook/actionbook)
 
-
 **The Highest Accuracy Browser Automation Engine for AI Agents**
 <br />
 Actionbook provides up-to-date action manuals and DOM structure,
@@ -42,6 +41,30 @@ Actionbook places up-to-date action manuals with the relevant DOM selectors dire
 See how Actionbook enables an agent to complete an Airbnb search task 10x faster.
 
 https://github.com/user-attachments/assets/9f896fe7-296a-44b3-8592-931a099612de
+
+## Featured Skill: `active-research`
+
+For X/Twitter research workflows, the most representative Actionbook skill is [`active-research`](./skills/active-research/SKILL.md).
+
+It combines verified selectors, real browser automation, and structured report generation to research a live topic end to end.
+
+### Demo: Analyze an X/Twitter Timeline
+
+In this demo, the agent opens X/Twitter, browses a live timeline, collects posts and engagement signals, and generates a summarized report.
+
+https://github.com/user-attachments/assets/4705364e-02bc-48b2-956c-c806df746ad1
+
+Example prompt:
+
+```text
+Use active-research to analyze today's X timeline activity around a topic and summarize the main themes.
+```
+
+This is a good example of what Actionbook does well:
+
+- browse live X/Twitter pages with verified selectors
+- collect post content, engagement, and timing information
+- summarize the result into a structured report instead of raw scraped output
 
 ## Quick Start
 
@@ -108,8 +131,8 @@ We move fast. Star Actionbook on Github to support and get latest information.
 
 Join the community:
 
-- [Chat with us on Discord](https://actionbook.dev/discord) - Get help, share your agents, and discuss ideas
-- [Follow @ActionbookHQ on X](https://x.com/ActionbookHQ) - Product updates and announcements
+- [Chat with us on Discord](https://actionbook.dev/discord) - For help, feedback, workflow discussion, and sharing what you build with Actionbook
+- [Follow @ActionbookHQ on X](https://x.com/ActionbookHQ) - For product updates, releases, and announcements
 
 ## Contributing
 
