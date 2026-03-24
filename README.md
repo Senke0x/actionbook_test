@@ -96,12 +96,12 @@ Skill support list:
 
 Actionbook playgrounds in this repo:
 
-- [`actionbook-scraper`](./playground/actionbook-scraper): generate reliable web scrapers with verified selectors and automatic validation
-- [`article-exporter`](./playground/article-exporter): export web articles into clean structured content for downstream processing and publishing workflows
-- [`deep-research`](./playground/deep-research): multi-source browsing, analysis, and report generation with Actionbook
 - [`arxiv-viewer`](./playground/arxiv-viewer): search, read, and analyze arXiv papers with a hybrid API + browser workflow
 - [`lib-rs-scraper`](./playground/lib-rs-scraper): scrape lib.rs using Actionbook-verified selectors
 - [`rust-learner`](./playground/rust-learner): query Rust language features and crate updates with browser-assisted workflows
+- [`actionbook-scraper`](./playground/actionbook-scraper): generate reliable web scrapers with verified selectors and automatic validation
+- [`article-exporter`](./playground/article-exporter): export web articles into clean structured content for downstream processing and publishing workflows
+- [`deep-research`](./playground/deep-research): multi-source browsing, analysis, and report generation with Actionbook
 
 More examples:
 
