@@ -50,7 +50,7 @@ It combines verified selectors, real browser automation, and structured report g
 
 ### Demo: Analyze an X/Twitter Timeline
 
-In this demo, the agent opens X/Twitter, browses a live timeline, collects posts and engagement signals, and generates a summarized report.
+You can use Claude Code with Actionbook to operate the browser on X/Twitter, collect timeline activity and engagement signals, and turn the result into a structured summary.
 
 https://github.com/user-attachments/assets/4705364e-02bc-48b2-956c-c806df746ad1
 
@@ -60,11 +60,7 @@ Example prompt:
 Use active-research to analyze today's X timeline activity around a topic and summarize the main themes.
 ```
 
-This is a good example of what Actionbook does well:
-
-- browse live X/Twitter pages with verified selectors
-- collect post content, engagement, and timing information
-- summarize the result into a structured report instead of raw scraped output
+By starting from Actionbook's verified selectors and action manuals instead of guessing the DOM, the agent can complete this workflow more accurately and reliably.
 
 ## Quick Start
 
