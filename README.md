@@ -94,19 +94,19 @@ More examples:
 
 Use Actionbook in the way that fits your agent stack:
 
-- **[CLI](https://actionbook.dev/docs/api-reference/cli)** for direct local usage, browser operations, and setup.
+- **[CLI](https://actionbook.dev/docs/api-reference/cli)** for direct local usage.
 - **[Skills](https://actionbook.dev/docs/guides/skills)** for better agent behavior and lower hallucination risk.
 - **[OpenClaw Plugin](https://actionbook.dev/docs/openclaw)** for OpenClaw-based agent workflows with Actionbook.
 - **[Dify Plugin](https://actionbook.dev/docs/guides/dify-plugin)** for using Actionbook selectors and browser automation inside Dify workflows.
 - **[MCP Server](https://actionbook.dev/docs/guides/mcp-server)** for Cursor, Claude Code, VS Code, and similar clients.
-- **[JavaScript SDK](https://actionbook.dev/docs/guides/sdk-integration)** for custom integrations and programmatic use.
+- **[JavaScript SDK](https://actionbook.dev/docs/guides/sdk-integration)** for custom integrations.
 
 
-## Stay tuned
+## Follow the Build
 
 We move fast. Star Actionbook on Github to support and get latest information.
 
-![Star Actionbook](https://github.com/user-attachments/assets/2d6571cb-4e12-438b-b7bf-9a4b68ef2be3)
+[![Star Actionbook](https://github.com/user-attachments/assets/2d6571cb-4e12-438b-b7bf-9a4b68ef2be3)](https://github.com/actionbook/actionbook)
 
 Join the community:
 
