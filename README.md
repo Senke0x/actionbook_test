@@ -83,9 +83,9 @@ npx skills add actionbook/actionbook
 
 Skill support list:
 
-- `actionbook`: the core browser-operation workflow. Best for browsing posts on X/Twitter and Reddit, collecting post and comment data, filling email flows and complex forms, and handling general page operations with less selector guesswork.
-- `active-research`: a deep research workflow for multi-source browsing, structured collection, and long-form report generation.
-- `extract`: a data extraction workflow that uses Actionbook selectors first, then generates a reusable Playwright script and structured output such as JSON or CSV.
+- `actionbook`: core skill for browser automation, complex page extraction, and form filling.
+- `active-research`: research skill for multi-source browsing, structured collection, and long-form reports.
+- `extract`: extraction skill for selector-first data extraction, reusable Playwright scripts, and JSON/CSV output.
 
 ## Example Use Cases
 
