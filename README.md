@@ -89,25 +89,11 @@ Skill support list:
 
 ## Example Use Cases
 
-### Featured Skill: `active-research`
-
-For X/Twitter research workflows, the most representative Actionbook skill is [`active-research`](./skills/active-research/SKILL.md).
-
-It combines verified selectors, real browser automation, and structured report generation to research a live topic end to end.
-
 ### Demo: Analyze an X/Twitter Timeline
 
-You can use Claude Code with Actionbook to operate the browser on X/Twitter, collect timeline activity and engagement signals, and turn the result into a structured summary.
+Use Actionbook with Claude Code to operate X/Twitter, collect timeline activity and engagement signals, and turn the results into a structured summary. This works well for tracking a topic, reviewing an account, or understanding what happened on a live timeline.
 
 https://github.com/user-attachments/assets/e5e74e77-9669-4710-870c-06e9a84a5492
-
-Example prompt:
-
-```text
-Use /active-research to analyze ElonMusk's today's X timeline activity and summarize the main themes.
-```
-
-By starting from Actionbook's verified selectors and action manuals instead of guessing the DOM, the agent can complete this workflow more accurately and reliably.
 
 ### Other Use Cases:
 
