@@ -68,11 +68,11 @@ curl -fsSL https://actionbook.dev/install.sh | bash
 irm https://actionbook.dev/install.ps1 | iex
 ```
 
-### 2. Use Actionbook CLI
+### 2. Try it with your agent
 
-Claude Code prompt:
-```bash
-use actionbook cli goto www.arxiv.org and search for "large language model",summarize the top 3 papers
+Ask your agent to use Actionbook:
+```text
+Use Actionbook CLI to open arXiv Advanced Search, search "browser automation agent" in Abstract for the past 3 months, then summarize the first 3 results with title, authors, date, link, and a short abstract-based summary.
 ```
 
 ### 3. Add one or more skills to your agent
@@ -99,12 +99,12 @@ It combines verified selectors, real browser automation, and structured report g
 
 You can use Claude Code with Actionbook to operate the browser on X/Twitter, collect timeline activity and engagement signals, and turn the result into a structured summary.
 
-https://github.com/user-attachments/assets/4705364e-02bc-48b2-956c-c806df746ad1
+https://github.com/user-attachments/assets/e5e74e77-9669-4710-870c-06e9a84a5492
 
 Example prompt:
 
 ```text
-Use active-research to analyze today's X timeline activity around a topic and summarize the main themes.
+Use /active-research to analyze ElonMusk's today's X timeline activity and summarize the main themes.
 ```
 
 By starting from Actionbook's verified selectors and action manuals instead of guessing the DOM, the agent can complete this workflow more accurately and reliably.
